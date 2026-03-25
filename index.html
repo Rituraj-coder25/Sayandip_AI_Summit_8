@@ -1,0 +1,1901 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>GOE - Global Ontology Engine</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=Space+Mono:wght@400;700&family=IBM+Plex+Sans:wght@300;400;500;600&display=swap" rel="stylesheet" />
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+<style>
+  :root {
+    --bg-void:#060810; --bg-deep:#0c0f1a; --bg-panel:#0f1424; --bg-card:#141929; --bg-elevated:#1a2035;
+    --border-dim:rgba(255,255,255,.06); --border-mid:rgba(255,255,255,.12); --border-bright:rgba(255,255,255,.22);
+    --saffron:#ff8c00; --phosphor:#00ff88; --alert-red:#ff3d57; --alert-blue:#4d9eff; --alert-amber:#ffbe00;
+    --text-primary:#e8ebf4; --text-secondary:#8b93b0; --text-muted:#4a5070;
+    --font-display:"Syne",sans-serif; --font-mono:"Space Mono",monospace; --font-body:"IBM Plex Sans",sans-serif;
+  }
+  * { box-sizing:border-box; }
+  html { scroll-behavior:smooth; }
+  body {
+    margin:0; min-height:100vh; overflow:hidden; color:var(--text-primary); font-family:var(--font-body);
+    background:
+      radial-gradient(circle at top left, rgba(255,140,0,.12), transparent 25%),
+      radial-gradient(circle at top right, rgba(77,158,255,.08), transparent 24%),
+      linear-gradient(180deg, #070a12 0%, #060810 100%);
+  }
+  body::before {
+    content:""; position:fixed; inset:0; pointer-events:none; z-index:0; opacity:.35;
+    background:
+      linear-gradient(rgba(255,255,255,.02) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(255,255,255,.02) 1px, transparent 1px);
+    background-size:48px 48px;
+  }
+  .top-stack { position:fixed; inset:0 0 auto 0; z-index:100; }
+  .ticker-bar {
+    height:32px; overflow:hidden; border-bottom:1px solid var(--border-dim);
+    background:rgba(6,8,16,.95); backdrop-filter:blur(16px);
+  }
+  .ticker-track {
+    display:inline-flex; align-items:center; gap:26px; min-width:max-content; height:100%; padding-inline:20px;
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+    animation:ticker 44s linear infinite;
+  }
+  .ticker-label { color:var(--saffron); }
+  .ticker-up { color:var(--phosphor); }
+  .ticker-down { color:var(--alert-red); }
+  @keyframes ticker { from { transform:translateX(0); } to { transform:translateX(-50%); } }
+  .topbar {
+    height:56px; display:grid; grid-template-columns:270px 1fr auto; gap:14px; align-items:center; padding:0 16px;
+    border-bottom:1px solid var(--border-dim); background:rgba(8,10,18,.92); backdrop-filter:blur(16px);
+  }
+  .brand { display:flex; align-items:center; gap:12px; }
+  .brand-mark {
+    width:34px; height:34px; border-radius:10px; border:1px solid rgba(255,140,0,.35);
+    background:
+      linear-gradient(135deg, rgba(255,140,0,.22), rgba(255,190,0,.05)),
+      radial-gradient(circle at center, rgba(255,140,0,.2), transparent 68%);
+  }
+  .brand-title { font-family:var(--font-display); font-size:17px; font-weight:800; letter-spacing:.08em; }
+  .brand-sub { font-family:var(--font-mono); font-size:9px; letter-spacing:.15em; text-transform:uppercase; color:var(--text-secondary); }
+  .nav { display:flex; align-items:center; gap:6px; overflow-x:auto; scrollbar-width:none; }
+  .nav::-webkit-scrollbar { display:none; }
+  .nav button, .chip, .map-chip, .seed-chip, .button {
+    appearance:none; border:1px solid var(--border-mid); background:var(--bg-card); color:var(--text-secondary);
+    border-radius:999px; cursor:pointer; transition:.16s ease;
+  }
+  .nav button {
+    padding:8px 12px; border-color:transparent; background:transparent; font-family:var(--font-mono);
+    font-size:10px; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap;
+  }
+  .nav button.active, .nav button:hover, .chip.active, .chip:hover, .map-chip.active {
+    color:var(--saffron); border-color:rgba(255,140,0,.28); background:rgba(255,140,0,.08);
+  }
+  .meta { display:flex; gap:16px; align-items:center; }
+  .pill {
+    display:inline-flex; align-items:center; gap:8px; font-family:var(--font-mono); font-size:10px;
+    letter-spacing:.08em; text-transform:uppercase; color:var(--text-secondary);
+  }
+  .dot { width:8px; height:8px; border-radius:50%; background:var(--text-muted); }
+  .dot.online { background:var(--phosphor); box-shadow:0 0 10px rgba(0,255,136,.7); }
+  .dot.warn { background:var(--alert-amber); box-shadow:0 0 10px rgba(255,190,0,.7); }
+  .dot.offline { background:var(--alert-red); box-shadow:0 0 10px rgba(255,61,87,.7); }
+  .app {
+    position:relative; z-index:1; display:grid; grid-template-columns:260px minmax(0,1fr) 300px; height:100vh; padding-top:88px;
+  }
+  .sidebar, .main { height:calc(100vh - 88px); overflow-y:auto; }
+  .sidebar { background:rgba(9,12,22,.86); backdrop-filter:blur(10px); border-right:1px solid var(--border-dim); }
+  .sidebar.right { border-right:none; border-left:1px solid var(--border-dim); }
+  .side-section { padding:18px 16px; border-bottom:1px solid var(--border-dim); }
+  .section-title {
+    display:flex; align-items:center; gap:8px; margin-bottom:12px; color:var(--text-muted);
+    font-family:var(--font-mono); font-size:9px; letter-spacing:.18em; text-transform:uppercase;
+  }
+  .section-title::after { content:""; flex:1; height:1px; background:var(--border-dim); }
+  .stack { display:grid; gap:8px; }
+  .stack.tight { gap:6px; }
+  .chip, .map-chip, .seed-chip, .button { padding:8px 12px; font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+  .button.primary { background:var(--saffron); border-color:var(--saffron); color:#000; font-weight:700; }
+  .button.ghost { background:transparent; }
+  .loading { color:var(--text-muted); font-family:var(--font-mono); font-size:11px; letter-spacing:.08em; text-transform:uppercase; }
+  .small { font-size:11px; }
+  .muted { color:var(--text-secondary); }
+  .toggle {
+    display:flex; justify-content:space-between; gap:12px; padding:10px 12px; border:1px solid var(--border-dim);
+    border-radius:12px; background:var(--bg-card);
+  }
+  .toggle label { display:flex; flex-direction:column; gap:2px; }
+  .toggle strong { font-size:12px; font-weight:600; }
+  .toggle span { font-size:11px; color:var(--text-muted); }
+  .toggle input { accent-color:var(--saffron); }
+  .main { padding:20px; }
+  .module { display:none; }
+  .module.active { display:block; }
+  .hero {
+    padding:22px; margin-bottom:16px; border:1px solid var(--border-dim); border-radius:18px;
+    background:linear-gradient(145deg, rgba(255,140,0,.1), transparent 55%), linear-gradient(180deg, rgba(20,25,41,.95), rgba(15,20,36,.96));
+  }
+  .eyebrow { margin-bottom:10px; color:var(--saffron); font-family:var(--font-mono); font-size:10px; letter-spacing:.18em; text-transform:uppercase; }
+  h1 { margin:0 0 10px; font-family:var(--font-display); font-size:clamp(28px, 3vw, 44px); line-height:1.02; }
+  p { margin:0; }
+  .hero p { color:var(--text-secondary); }
+  .hero-actions, .controls { display:flex; flex-wrap:wrap; gap:10px; margin-top:18px; }
+  .grid-4, .grid-3, .grid-2 { display:grid; gap:14px; }
+  .grid-4 { grid-template-columns:repeat(4, minmax(0, 1fr)); }
+  .grid-3 { grid-template-columns:repeat(3, minmax(0, 1fr)); }
+  .grid-2 { grid-template-columns:repeat(2, minmax(0, 1fr)); }
+  .card, .panel, .feed-item, .alert-item, .brief-item, .history, .source, .mini {
+    border:1px solid var(--border-dim); border-radius:14px; background:var(--bg-card);
+  }
+  .metric { padding:16px; }
+  .metric-kicker { margin-bottom:8px; color:var(--text-muted); font-family:var(--font-mono); font-size:9px; letter-spacing:.16em; text-transform:uppercase; }
+  .metric-value { font-family:var(--font-display); font-size:30px; font-weight:800; line-height:1; }
+  .metric-foot { margin-top:8px; font-size:12px; color:var(--text-secondary); }
+  .panel { margin-bottom:16px; overflow:hidden; background:rgba(15,20,36,.92); }
+  .panel-head {
+    display:flex; justify-content:space-between; gap:14px; align-items:center; padding:14px 16px;
+    border-bottom:1px solid var(--border-dim); background:rgba(20,25,41,.82);
+  }
+  .panel-title { font-family:var(--font-mono); font-size:10px; letter-spacing:.16em; text-transform:uppercase; color:var(--text-secondary); }
+  .panel-sub { color:var(--text-muted); font-size:11px; }
+  .panel-body { padding:16px; }
+  .intel { padding:16px; }
+  .intel-top, .split { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; }
+  .intel h3, .feed-item h3, .alert-item h3, .history h3, .mini h3 { margin:0; font-size:14px; }
+  .tag {
+    display:inline-flex; border-radius:999px; padding:3px 8px; font-family:var(--font-mono);
+    font-size:9px; letter-spacing:.08em; text-transform:uppercase; white-space:nowrap;
+  }
+  .critical { color:var(--alert-red); background:rgba(255,61,87,.12); }
+  .elevated { color:var(--alert-amber); background:rgba(255,190,0,.12); }
+  .stable { color:var(--phosphor); background:rgba(0,255,136,.1); }
+  .info { color:var(--alert-blue); background:rgba(77,158,255,.12); }
+  .meta-row {
+    display:flex; flex-wrap:wrap; gap:8px; margin-top:10px; color:var(--text-muted);
+    font-family:var(--font-mono); font-size:10px; letter-spacing:.06em; text-transform:uppercase;
+  }
+  .world-map { width:100%; height:580px; border:1px solid var(--border-dim); border-radius:16px; overflow:hidden; }
+  .leaflet-container { background:#08101b; font-family:var(--font-body); }
+  .text-input, .text-area {
+    width:100%; padding:12px 14px; border:1px solid var(--border-mid); border-radius:12px;
+    background:var(--bg-card); color:var(--text-primary); font:inherit; outline:none;
+  }
+  .text-area { min-height:120px; resize:vertical; }
+  .chat-log {
+    min-height:360px; max-height:520px; overflow-y:auto; padding:14px; border:1px solid var(--border-dim);
+    border-radius:16px; background:rgba(10,13,24,.88);
+  }
+  .chat-entry { margin-bottom:12px; }
+  .chat-role { margin-bottom:6px; color:var(--text-muted); font-family:var(--font-mono); font-size:9px; letter-spacing:.16em; text-transform:uppercase; }
+  .chat-bubble {
+    padding:12px 14px; border:1px solid var(--border-dim); border-radius:14px; background:var(--bg-card);
+    color:var(--text-secondary); white-space:pre-wrap; line-height:1.65; font-size:13px;
+  }
+  .chat-entry.user .chat-bubble { background:rgba(255,140,0,.1); border-color:rgba(255,140,0,.22); color:var(--text-primary); }
+  .brief-doc {
+    min-height:360px; padding:24px; border:1px solid var(--border-dim); border-radius:16px;
+    background:linear-gradient(180deg, rgba(20,25,41,.94), rgba(12,15,26,.95)); white-space:pre-wrap; line-height:1.72; font-size:13px;
+  }
+  .steps { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:10px; }
+  .step {
+    padding:12px; border:1px solid var(--border-dim); border-radius:12px; background:var(--bg-card);
+    color:var(--text-muted); font-family:var(--font-mono); font-size:10px; letter-spacing:.08em; text-transform:uppercase;
+  }
+  .step.active { color:var(--saffron); border-color:rgba(255,140,0,.35); background:rgba(255,140,0,.08); }
+  .step.done { color:var(--phosphor); border-color:rgba(0,255,136,.24); }
+  .scenario-prob { color:var(--saffron); font-family:var(--font-display); font-size:24px; font-weight:800; }
+  .ontology-wrap { min-height:520px; border:1px solid var(--border-dim); border-radius:16px; background:radial-gradient(circle at top, rgba(255,140,0,.08), transparent 36%), #0b0f1a; overflow:hidden; }
+  .ontology-svg { width:100%; height:520px; display:block; }
+  .modal {
+    position:fixed; inset:0; display:flex; align-items:center; justify-content:center; padding:20px;
+    background:rgba(3,4,9,.78); backdrop-filter:blur(12px); z-index:200;
+  }
+  .modal.hidden { display:none; }
+  .modal-card {
+    width:min(560px, 100%); padding:24px; border:1px solid var(--border-mid); border-radius:20px;
+    background:linear-gradient(180deg, rgba(20,25,41,.98), rgba(10,13,24,.98));
+  }
+  .modal-card h2 { margin:0 0 10px; font-family:var(--font-display); font-size:28px; line-height:1.1; }
+  .modal-card p, .modal-card li { color:var(--text-secondary); line-height:1.65; font-size:14px; }
+  .modal-card ol { margin:0; padding-left:18px; }
+  .notice {
+    margin-top:12px; padding:12px 14px; border:1px solid var(--border-dim); border-radius:12px;
+    background:rgba(255,255,255,.02); color:var(--text-secondary); font-size:13px; line-height:1.6;
+  }
+  .feed-link { color:inherit; text-decoration:none; }
+  .feed-link:hover { color:var(--saffron); }
+  @media (max-width:1120px) {
+    body { overflow:auto; }
+    .topbar { grid-template-columns:1fr; height:auto; padding:12px 16px; }
+    .app { display:flex; flex-direction:column; padding-top:120px; }
+    .main { order:-1; height:auto; padding:16px; }
+    .sidebar, .sidebar.right { height:auto; border:none; }
+    .grid-4, .grid-3, .grid-2 { grid-template-columns:1fr; }
+  }
+  @media print {
+    body { background:#fff; color:#000; overflow:visible; }
+    body::before, .top-stack, .sidebar, .controls, .button, .steps, .panel-head, .hero-actions { display:none !important; }
+    .app { display:block; padding-top:0; }
+    .main { height:auto; overflow:visible; padding:0; background:#fff; }
+    .module { display:none !important; }
+    #module-brief { display:block !important; }
+    .brief-doc { min-height:auto; border:none; border-radius:0; background:#fff; color:#000; padding:0; }
+  }
+</style>
+</head>
+<body>
+  <div id="authModal" class="modal">
+    <div class="modal-card">
+      <div class="eyebrow">Mode A access gate</div>
+      <h2>Global Ontology Engine</h2>
+      <p>This browser build stores access in session only. The demo password is <strong>GOE-INDIA-2026</strong>.</p>
+      <div class="stack" style="margin-top:12px;">
+        <input id="authPassword" class="text-input" type="password" placeholder="Enter session password" />
+        <div id="authMessage" class="small muted"></div>
+      </div>
+      <div class="controls" style="margin-top:16px;">
+        <button id="unlockButton" class="button primary" type="button">Unlock Session</button>
+      </div>
+      <div class="notice">This is a lightweight demo gate. It is not a production security boundary.</div>
+    </div>
+  </div>
+
+  <div id="aiModal" class="modal hidden">
+    <div class="modal-card">
+      <div class="eyebrow">AI setup</div>
+      <h2>Connect GOE-1</h2>
+      <p>Mode A prefers Ollama on <code>localhost:11434</code>. If Ollama is unavailable you can store an Anthropic API key in session for this browser run only.</p>
+      <div class="notice">
+        <strong>Recommended:</strong>
+        <ol>
+          <li>Install Ollama.</li>
+          <li>Run <code>ollama pull llama3.1:8b</code>.</li>
+          <li>Keep Ollama running and refresh this page.</li>
+        </ol>
+      </div>
+      <div class="stack" style="margin-top:12px;">
+        <input id="apiKeyInput" class="text-input" type="password" placeholder="Anthropic API key (session only)" />
+        <div id="aiMessage" class="small muted"></div>
+      </div>
+      <div class="controls" style="margin-top:16px;">
+        <button id="saveApiKey" class="button primary" type="button">Use Anthropic Key</button>
+        <button id="retryAi" class="button" type="button">Retry Ollama Detect</button>
+        <button id="skipAi" class="button ghost" type="button">Browse without AI</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="top-stack">
+    <div class="ticker-bar"><div id="tickerTrack" class="ticker-track"></div></div>
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark"></div>
+        <div>
+          <div class="brand-title">GOE</div>
+          <div class="brand-sub">Global Ontology Engine - India Innovates 2026</div>
+        </div>
+      </div>
+      <nav id="nav" class="nav">
+        <button class="active" data-module="overview" type="button">Overview</button>
+        <button data-module="intelligence" type="button">Intelligence</button>
+        <button data-module="worldmonitor" type="button">World Monitor</button>
+        <button data-module="india" type="button">India</button>
+        <button data-module="analyst" type="button">Analyst</button>
+        <button data-module="ontology" type="button">Ontology</button>
+        <button data-module="brief" type="button">Daily Brief</button>
+        <button data-module="scenarios" type="button">Scenarios</button>
+        <button data-module="markets" type="button">Markets</button>
+      </nav>
+      <div class="meta">
+        <div class="pill"><span id="aiDot" class="dot"></span><span id="aiText">Detecting AI</span></div>
+        <div class="pill"><span class="dot online"></span><span id="clock"></span></div>
+      </div>
+    </header>
+  </div>
+
+  <div class="app">
+    <aside class="sidebar">
+      <section class="side-section">
+        <div class="section-title">Domain Filters</div>
+        <div id="domainFilters" class="stack tight"></div>
+      </section>
+      <section class="side-section">
+        <div class="section-title">Bharatiya Feeds</div>
+        <div id="languageToggles" class="stack"></div>
+      </section>
+      <section class="side-section">
+        <div class="section-title">Source Health</div>
+        <div id="sourceHealth" class="stack"></div>
+      </section>
+      <section class="side-section">
+        <div class="section-title">Session</div>
+        <div class="stack tight">
+          <button id="refreshAll" class="button" type="button">Refresh All Sources</button>
+          <button id="openAi" class="button" type="button">AI Setup</button>
+          <button id="clearSession" class="button ghost" type="button">Clear Session Data</button>
+          <div id="lastRefresh" class="small muted">Waiting for first refresh.</div>
+        </div>
+      </section>
+    </aside>
+
+    <main class="main">
+      <section id="module-overview" class="module active">
+        <div class="hero">
+          <div class="eyebrow">Sovereign browser build - Mode A</div>
+          <h1>India-first strategic intelligence from live public data</h1>
+          <p>Mode A runs as a single HTML file. It pulls real signals from USGS, CoinGecko, ExchangeRate, Open-Meteo, REST Countries, proxied NSE, and RSS feeds, then grounds analyst workflows with current context instead of placeholders.</p>
+          <div class="hero-actions">
+            <button class="button primary" type="button" data-jump="brief">Generate Daily Brief</button>
+            <button class="button" type="button" data-jump="analyst">Open Analyst</button>
+            <button class="button" type="button" data-jump="worldmonitor">Open World Monitor</button>
+          </div>
+        </div>
+        <div id="overviewMetrics" class="grid-4"></div>
+        <div class="grid-2" style="margin-top:16px;">
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">Operational Snapshot</div><div class="panel-sub">Live context assembled from current feeds and markets.</div></div></div>
+            <div id="overviewSnapshot" class="panel-body loading">Building live summary.</div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">Bharatiya Spotlight</div><div class="panel-sub">Translated regional signals when AI is available.</div></div></div>
+            <div id="overviewBharatiya" class="panel-body loading">Waiting for regional feeds.</div>
+          </div>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div><div class="panel-title">Critical Intelligence</div><div class="panel-sub">RSS-driven cards ranked by severity and India relevance.</div></div></div>
+          <div id="overviewCritical" class="panel-body stack"></div>
+        </div>
+      </section>
+
+      <section id="module-intelligence" class="module">
+        <div class="hero">
+          <div class="eyebrow">RSS ingestion and triage</div>
+          <h1>Live intelligence cards</h1>
+          <p>Every card here is built from the current deduplicated RSS feed set or from translated Bharatiya signals. If a source is stale or unavailable, GOE shows that state instead of pretending the data is live.</p>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div><div class="panel-title">Filter Controls</div><div class="panel-sub">Domain chips sync with the left sidebar.</div></div></div>
+          <div class="panel-body"><div id="intelFilters" class="controls"></div></div>
+        </div>
+        <div id="intelCards" class="stack"></div>
+      </section>
+
+      <section id="module-worldmonitor" class="module">
+        <div class="hero">
+          <div class="eyebrow">Map and signal layers</div>
+          <h1>World Monitor</h1>
+          <p>USGS earthquakes plot live on the Leaflet map. Curated conflict hotspots are explicitly labeled as GOE assessed positions. Bharatiya feed intensity and Delhi weather sit on separate layers for transparency.</p>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <div><div class="panel-title">Leaflet Situation Map</div><div class="panel-sub">Earthquakes are live USGS. Hotspots are curated GOE assessed positions.</div></div>
+            <button id="refreshMap" class="button" type="button">Refresh Map Data</button>
+          </div>
+          <div class="panel-body">
+            <div class="controls" style="margin-bottom:12px;">
+              <button class="map-chip active" type="button" data-layer="earthquakes">Earthquakes</button>
+              <button class="map-chip active" type="button" data-layer="hotspots">Hotspots</button>
+              <button class="map-chip active" type="button" data-layer="bharatiya">Bharatiya Ring</button>
+              <button class="map-chip active" type="button" data-layer="climate">Climate Marker</button>
+            </div>
+            <div id="worldMap" class="world-map"></div>
+            <div id="mapNote" class="small muted" style="margin-top:10px;">Map readying.</div>
+          </div>
+        </div>
+        <div class="grid-3">
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">USGS Events</div><div class="panel-sub">Top M2.5+ events from the last day.</div></div></div><div id="seismicList" class="panel-body stack"></div></div>
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">Conflict Hotspots</div><div class="panel-sub">Curated GOE assessed fixed positions.</div></div></div><div id="hotspotList" class="panel-body stack"></div></div>
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">Climate and India Marker</div><div class="panel-sub">Open-Meteo weather plus Bharatiya intensity.</div></div></div><div id="climateInfo" class="panel-body stack"></div></div>
+        </div>
+      </section>
+
+      <section id="module-india" class="module">
+        <div class="hero">
+          <div class="eyebrow">India-specific synthesis</div>
+          <h1>India monitor</h1>
+          <p>The India tab combines actual Indian market data, RBI and PIB items, regional feed coverage, current weather, and India-focused RSS keyword pressure into one operating picture.</p>
+        </div>
+        <div id="indiaMetrics" class="grid-4"></div>
+        <div class="grid-2" style="margin-top:16px;">
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">India Open Data</div><div class="panel-sub">REST Countries metadata plus current operational inputs.</div></div></div><div id="indiaOpenData" class="panel-body grid-2"></div></div>
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">India Exposure Signals</div><div class="panel-sub">Current feed items mentioning India or core exposure terms.</div></div></div><div id="indiaExposure" class="panel-body stack"></div></div>
+        </div>
+        <div class="grid-2">
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">PIB and RBI Watch</div><div class="panel-sub">Direct RSS items from government and macro sources.</div></div></div><div id="indiaGov" class="panel-body stack"></div></div>
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">Bharatiya Media Pulse</div><div class="panel-sub">Regional-language items translated when AI is available.</div></div></div><div id="indiaBharatiya" class="panel-body stack"></div></div>
+        </div>
+      </section>
+
+      <section id="module-analyst" class="module">
+        <div class="hero">
+          <div class="eyebrow">GOE-1</div>
+          <h1>Grounded strategic analyst</h1>
+          <p>GOE-1 routes to local Ollama first, then to an Anthropic key if provided. Before each call it prepends live seismic, RSS, forex, and market context so the answer is anchored in current signals.</p>
+        </div>
+        <div class="grid-2">
+          <div class="panel">
+            <div class="panel-head">
+              <div><div class="panel-title">Analyst Console</div><div class="panel-sub">Chat history is stored in session only.</div></div>
+              <div class="controls"><button id="clearChat" class="button" type="button">Clear Chat</button><button id="exportChat" class="button" type="button">Export Chat</button></div>
+            </div>
+            <div class="panel-body">
+              <div id="chatLog" class="chat-log"></div>
+              <div class="stack" style="margin-top:14px;">
+                <textarea id="chatInput" class="text-area" placeholder="Ask a hard question, for example: What is India's most critical strategic risk right now and what should the NSA recommend to the PM?"></textarea>
+                <div class="controls"><button id="sendChat" class="button primary" type="button">Send Query</button><button id="regenChat" class="button" type="button">Regenerate Last</button></div>
+              </div>
+            </div>
+          </div>
+          <div class="panel">
+            <div class="panel-head"><div><div class="panel-title">Seed Queries</div><div class="panel-sub">Use one of these to test grounding quickly.</div></div></div>
+            <div class="panel-body"><div id="chatSeeds" class="controls"></div><div class="notice"><strong>Current AI mode:</strong> <span id="chatMode">Detecting</span><br />If AI is unavailable, GOE returns the current live context snapshot instead of fabricating an answer.</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="module-ontology" class="module">
+        <div class="hero">
+          <div class="eyebrow">D3 force graph</div>
+          <h1>Living ontology graph</h1>
+          <p>The graph is rebuilt from current RSS entities, the India node, core domains, and curated conflict hotspots. Search highlights matching nodes, click any node to seed the analyst, and the connection finder explains graph paths.</p>
+        </div>
+        <div class="panel">
+          <div class="panel-head">
+            <div><div class="panel-title">Graph Controls</div><div class="panel-sub">Search, export, and path tracing.</div></div>
+            <div class="controls"><button id="refreshGraph" class="button" type="button">Rebuild Graph</button><button id="exportGraphJson" class="button" type="button">Export JSON</button><button id="exportGraphSvg" class="button" type="button">Export SVG</button></div>
+          </div>
+          <div class="panel-body">
+            <div class="grid-3">
+              <input id="graphSearch" class="text-input" type="text" placeholder="Search entity" />
+              <input id="connectionFrom" class="text-input" type="text" placeholder="Connection finder: entity A" />
+              <input id="connectionTo" class="text-input" type="text" placeholder="Connection finder: entity B" />
+            </div>
+            <div class="controls" style="margin-top:12px;"><button id="findConnection" class="button primary" type="button">Find Connection</button></div>
+            <div id="connectionResult" class="stack" style="margin-top:12px;"></div>
+          </div>
+        </div>
+        <div class="panel"><div class="panel-head"><div><div class="panel-title">Ontology Visualization</div><div class="panel-sub">India stays central; entities and domains orbit around live feeds.</div></div></div><div class="panel-body"><div class="ontology-wrap"><svg id="ontologyGraph" class="ontology-svg"></svg></div></div></div>
+      </section>
+
+      <section id="module-brief" class="module">
+        <div class="hero">
+          <div class="eyebrow">Government-style brief</div>
+          <h1>Daily strategic brief</h1>
+          <p>This brief uses the same live context builder as the analyst. If AI is configured, GOE-1 drafts the document. If AI is unavailable, the page still assembles a deterministic live-data brief instead of hallucinating.</p>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div><div class="panel-title">Brief Generator</div><div class="panel-sub">Three-stage run: scanning, correlating, drafting.</div></div><div class="controls"><button id="genBrief" class="button primary" type="button">Generate Strategic Brief</button><button id="printBrief" class="button" type="button">Print / PDF</button></div></div>
+          <div class="panel-body"><div id="briefSteps" class="steps"><div class="step" data-step="0">Scanning signals</div><div class="step" data-step="1">Correlating domains</div><div class="step" data-step="2">Drafting brief</div></div><div id="briefDoc" class="brief-doc" style="margin-top:14px;">No brief generated yet.</div></div>
+        </div>
+      </section>
+
+      <section id="module-scenarios" class="module">
+        <div class="hero">
+          <div class="eyebrow">Hypothesis testing</div>
+          <h1>Scenario engine</h1>
+          <p>Enter a geopolitical hypothesis and GOE-1 returns a probability tree with three branches, India impact scoring, recommended responses, and a net assessment. Scenario history is stored in session.</p>
+        </div>
+        <div class="panel">
+          <div class="panel-head"><div><div class="panel-title">Scenario Input</div><div class="panel-sub">Run with live context from current feeds.</div></div><button id="runScenario" class="button primary" type="button">Run Scenario Analysis</button></div>
+          <div class="panel-body"><textarea id="scenarioInput" class="text-area" placeholder="Enter a geopolitical hypothesis..."></textarea><div id="scenarioSeeds" class="controls" style="margin-top:12px;"></div></div>
+        </div>
+        <div class="grid-2">
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">Scenario Result</div><div class="panel-sub">Three branches color-coded by India impact.</div></div></div><div id="scenarioResult" class="panel-body stack">No scenario run yet.</div></div>
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">Scenario History</div><div class="panel-sub">Most recent session hypotheses.</div></div></div><div id="scenarioHistory" class="panel-body stack"></div></div>
+        </div>
+      </section>
+
+      <section id="module-markets" class="module">
+        <div class="hero">
+          <div class="eyebrow">Markets and macro pulse</div>
+          <h1>Real market board</h1>
+          <p>BTC, ETH, SOL, and forex come from live public APIs. NIFTY and SENSEX come from a proxied NSE path with a Yahoo fallback. Where a free browser-mode data source is unavailable, GOE labels it honestly instead of estimating silently.</p>
+        </div>
+        <div id="marketTiles" class="grid-4"></div>
+        <div class="grid-2" style="margin-top:16px;">
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">BTC 7-day Trend</div><div class="panel-sub">CoinGecko daily market chart.</div></div></div><div class="panel-body" style="min-height:320px;"><canvas id="btcChart"></canvas></div></div>
+          <div class="panel"><div class="panel-head"><div><div class="panel-title">Markets Analysis</div><div class="panel-sub">AI interpretation when available, deterministic summary otherwise.</div></div><button id="runMarketAnalysis" class="button" type="button">Run Markets Analysis</button></div><div id="marketAnalysis" class="panel-body">No analysis generated yet.</div></div>
+        </div>
+      </section>
+    </main>
+
+    <aside class="sidebar right">
+      <section class="side-section">
+        <div class="section-title">Live Signal Feed</div>
+        <div id="liveFeed" class="stack"></div>
+      </section>
+      <section class="side-section">
+        <div class="section-title">Critical Alerts</div>
+        <div id="alerts" class="stack"></div>
+      </section>
+      <section class="side-section">
+        <div class="section-title">India Economic Pulse</div>
+        <div id="indiaPulse" class="stack tight"></div>
+      </section>
+      <section class="side-section">
+        <div class="section-title">AI Status</div>
+        <div class="stack tight">
+          <div class="source"><div class="panel-body"><div style="font-size:12px;font-weight:600;">GOE-1 status</div><div id="sideAi" class="small muted">Detecting local and cloud options.</div></div></div>
+          <div class="source"><div class="panel-body"><div style="font-size:12px;font-weight:600;">Cache state</div><div id="cacheState" class="small muted">No cache summary yet.</div></div></div>
+        </div>
+      </section>
+    </aside>
+  </div>
+
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
+<script>
+    const KEYS = { auth:"goe_demo_auth", api:"goe_api_key", chat:"goe_chat_history", scenarios:"goe_scenario_history", last:"goe_last_question" };
+    const TTL = { EARTHQUAKES:5, CRYPTO:5, CRYPTO_HISTORY:30, FOREX:30, NIFTY:5, WEATHER:60, COUNTRIES:1440, RSS:10, AI:30 };
+    const HOTSPOTS = [
+      { name:"Ukraine Front Lines", lat:49, lon:33, risk:"CRITICAL", india_score:45, domain:"geopolitics", note:"Active war, grain and energy implications for India." },
+      { name:"Gaza Strip", lat:31.4, lon:34.4, risk:"CRITICAL", india_score:55, domain:"defense", note:"Regional conflict with diaspora and shipping implications." },
+      { name:"LOC - Jammu and Kashmir", lat:34, lon:75, risk:"HIGH", india_score:95, domain:"defense", note:"India-Pakistan Line of Control." },
+      { name:"LAC - Depsang", lat:35, lon:79.5, risk:"HIGH", india_score:90, domain:"defense", note:"India-China Line of Actual Control." },
+      { name:"Taiwan Strait", lat:24, lon:120, risk:"HIGH", india_score:65, domain:"geopolitics", note:"Trade and semiconductor supply chain exposure." },
+      { name:"Persian Gulf", lat:26.5, lon:55, risk:"HIGH", india_score:75, domain:"economics", note:"Energy security and shipping lanes." },
+      { name:"Strait of Hormuz", lat:26.5, lon:56.5, risk:"ELEVATED", india_score:80, domain:"economics", note:"Crude chokepoint for Indian imports." },
+      { name:"South China Sea", lat:15, lon:115, risk:"HIGH", india_score:60, domain:"defense", note:"Trade route and QUAD implications." },
+      { name:"Myanmar Border", lat:23, lon:97, risk:"ELEVATED", india_score:70, domain:"geopolitics", note:"Border stability and refugee pressure." },
+      { name:"Iran Nuclear", lat:32, lon:53, risk:"ELEVATED", india_score:65, domain:"defense", note:"Energy and sanctions spillover." }
+    ];
+    const STATE = {
+      module:"overview",
+      filter:"all",
+      earth:{ features:[], metadata:{ count:0 } },
+      rss:[],
+      bharatiya:[],
+      critical:[],
+      forex:null,
+      crypto:null,
+      cryptoHistory:null,
+      indiaMarkets:null,
+      weather:null,
+      countries:{},
+      risk:null,
+      lastRefresh:null,
+      map:null,
+      mapLayers:{},
+      mapVisibility:{ earthquakes:true, hotspots:true, bharatiya:true, climate:true },
+      chart:null,
+      graph:null,
+      graphSearch:"",
+      activeLanguages:new Set(["hindi","bengali","tamil","urdu"]),
+      chat:loadSession(KEYS.chat, []),
+      scenarioHistory:loadSession(KEYS.scenarios, []),
+      lastQuestion:loadSession(KEYS.last, ""),
+      seeds:[
+        "What is India's most critical strategic risk right now and what should the NSA recommend to the PM?",
+        "Explain how current signals affect India's energy security.",
+        "Assess India's geopolitical risk this week using the current feed context.",
+        "What are the top three external shocks India should monitor over the next 72 hours?",
+        "Analyze the current state of India-Pakistan border signals and recommend a response posture.",
+        "What does the current USD/INR level mean for India's macro stability?"
+      ],
+      scenarioSeeds:[
+        "China announces a naval blockade of Taiwan Strait and India faces second-order economic shock.",
+        "Pakistan-India nuclear signalling escalates beyond the current threshold.",
+        "USA-China semiconductor decoupling accelerates and India must reposition supply chains.",
+        "Iran closes the Strait of Hormuz and India faces an energy crisis scenario."
+      ],
+      domains:[
+        { id:"all", label:"All" }, { id:"india", label:"India" }, { id:"bharatiya", label:"Bharatiya" },
+        { id:"geopolitics", label:"Geopolitics" }, { id:"economics", label:"Economics" }, { id:"defense", label:"Defense" },
+        { id:"technology", label:"Technology" }, { id:"climate", label:"Climate" }, { id:"society", label:"Society" }
+      ]
+    };
+    const CACHE = {
+      store:new Map(),
+      set(key, data, ttlMin) { const ttl = ttlMin * 60000; this.store.set(key, { data, ttl, expires:Date.now() + ttl, fetchedAt:new Date().toLocaleTimeString("en-IN") }); },
+      get(key) { const x = this.store.get(key); if (!x) return null; if (Date.now() > x.expires) return null; return x.data; },
+      stale(key) { const x = this.store.get(key); if (!x) return null; return { data:x.data, fetchedAt:x.fetchedAt }; },
+      del(key) { this.store.delete(key); },
+      stats() { const live = [...this.store.values()].filter((x) => Date.now() <= x.expires).length; return { total:this.store.size, live }; }
+    };
+    const AI = {
+      config:{ ollamaUrl:"http://localhost:11434", ollamaModel:"llama3.1:8b", anthropicUrl:"https://api.anthropic.com/v1/messages", apiKey:sessionStorage.getItem(KEYS.api) || "", mode:"detecting" },
+      async detect() {
+        try {
+          const r = await timedFetch(this.config.ollamaUrl + "/api/tags", {}, 2200);
+          if (r.ok) {
+            const data = await r.json();
+            const models = (data.models || []).map((m) => m.name);
+            const pick = ["llama3.3","phi4","llama3.1","llama3.2","mistral"].find((prefix) => models.some((m) => m.startsWith(prefix)));
+            if (pick) this.config.ollamaModel = models.find((m) => m.startsWith(pick));
+            this.config.mode = "ollama";
+            setAiStatus("Ollama active - " + this.config.ollamaModel, "online");
+            return "ollama";
+          }
+        } catch {}
+        if (this.config.apiKey) {
+          this.config.mode = "anthropic";
+          setAiStatus("Anthropic API key loaded", "warn");
+          return "anthropic";
+        }
+        this.config.mode = "none";
+        setAiStatus("No AI backend detected", "offline");
+        return "none";
+      },
+      async call(messages, systemPrompt, maxTokens = 1400) {
+        if (this.config.mode === "detecting") await this.detect();
+        const key = "ai_" + norm(JSON.stringify(messages) + systemPrompt).slice(0, 160);
+        const cached = CACHE.get(key);
+        if (cached) return cached;
+        let result = null;
+        if (this.config.mode === "ollama") result = await this.ollama(messages, systemPrompt, maxTokens);
+        if (this.config.mode === "anthropic") result = await this.anthropic(messages, systemPrompt, maxTokens);
+        if (result) CACHE.set(key, result, TTL.AI);
+        return result;
+      },
+      async ollama(messages, systemPrompt, maxTokens) {
+        const promptString = (systemPrompt ? systemPrompt + "\n\n" : "") + messages.map((m) => m.role.toUpperCase() + ": " + m.content).join("\n\n") + "\n\nASSISTANT:";
+        const r = await timedFetch(this.config.ollamaUrl + "/api/generate", {
+          method:"POST", headers:{ "Content-Type":"application/json" },
+          body:JSON.stringify({ model:this.config.ollamaModel, stream:false, prompt:promptString, options:{ temperature:.35, num_predict:maxTokens } })
+        }, 60000);
+        if (!r.ok) throw new Error("Ollama error " + r.status);
+        const data = await r.json();
+        return data.response ? data.response : null;
+      },
+      async anthropic(messages, systemPrompt, maxTokens) {
+        const r = await timedFetch(this.config.anthropicUrl, {
+          method:"POST",
+          headers:{
+            "Content-Type":"application/json", "x-api-key":this.config.apiKey, "anthropic-version":"2023-06-01",
+            "anthropic-dangerous-direct-browser-access":"true"
+          },
+          body:JSON.stringify({ model:"claude-sonnet-4-20250514", max_tokens:maxTokens, system:systemPrompt, messages })
+        }, 60000);
+        if (r.status === 401) throw new Error("Anthropic authentication failed.");
+        if (!r.ok) throw new Error("Anthropic error " + r.status);
+        const data = await r.json();
+        return data.content && data.content[0] ? data.content[0].text : null;
+      }
+    };
+    const ANTIGRAVITY = {
+      DOMAINS:{
+        defense:["missile","army","navy","airforce","drdo","nuclear","border","loc","lac","military","strike","war","weapon","drone","irgc","pla","nato","oref","hezbollah","hamas","tactical","warhead","spd","blockade"],
+        economics:["oil","opec","crude","inflation","rbi","rupee","inr","nifty","sensex","market","trade","sanction","tariff","export","import","gdp","forex","fdi","fred","eia","brent","wti","gas","fiscal","debt","imf","rate hike"],
+        technology:["cyber","hack","semiconductor","chip","ai","satellite","isro","space","5g","infrastructure","grid","telecom","tsmc","huawei","nvidia"],
+        climate:["earthquake","seismic","flood","cyclone","storm","drought","fire","wildfire","tsunami","volcano","usgs","noaa","hurricane","heat wave"],
+        geopolitics:["election","summit","president","minister","diplomacy","un","treaty","ceasefire","coup","protest","referendum","sanction","visa","ambassador","pakistan","china","iran","russia","ukraine","taiwan","nato","quad"]
+      },
+      HOTSPOTS:{
+        "LOC":{ india_score:95, domain:"defense", note:"India-Pakistan Line of Control." },
+        "LAC":{ india_score:90, domain:"defense", note:"India-China Line of Actual Control." },
+        "Strait of Hormuz":{ india_score:80, domain:"economics", note:"Crude chokepoint for Indian imports." },
+        "Persian Gulf":{ india_score:75, domain:"economics", note:"Energy security and shipping lanes." },
+        "South China Sea":{ india_score:60, domain:"defense", note:"Trade route and QUAD implications." },
+        "Taiwan Strait":{ india_score:65, domain:"geopolitics", note:"Trade and semiconductor supply chain." },
+        "Iran Nuclear":{ india_score:65, domain:"defense", note:"Energy and sanctions spillover." }
+      },
+      INDIA_FACTS:{
+        crude_import_pct:85,
+        spd_days:9.5,
+        gulf_diaspora:10000000,
+        gulf_trade_usd_b:200,
+        opec_import_share:.6,
+        nifty_baseline:22000,
+        inr_stress_threshold:86
+      },
+      classifyIntent(question) {
+        const q = (question || "").toLowerCase();
+        if (q.includes("brief") || q.includes("executive summary") || q.includes("threat matrix") || q.includes("strategic priorities")) return "daily_brief";
+        if (q.includes("energy") || q.includes("oil") || q.includes("crude") || q.includes("lng") || q.includes("hormuz") || q.includes("petroleum") || q.includes("fuel")) return "energy_security";
+        if (q.includes("strategic risk") || q.includes("critical risk") || q.includes("nsa") || q.includes("prime minister") || q.includes("nsc") || q.includes("threat")) return "strategic_risk";
+        if (q.includes("geopolit") || q.includes("risk this week") || q.includes("risk assessment")) return "geopolitical_risk";
+        if (q.includes("shock") || q.includes("72 hour") || q.includes("48 hour") || q.includes("watch") || q.includes("monitor") || q.includes("external")) return "external_shocks";
+        if (q.includes("market") || q.includes("economy") || q.includes("nifty") || q.includes("rupee") || q.includes("inflation") || q.includes("macro")) return "market_analysis";
+        if (q.includes("defense") || q.includes("military") || q.includes("border") || q.includes("loc") || q.includes("lac") || q.includes("pakistan") || q.includes("china")) return "defense_risk";
+        if (q.includes("technolog") || q.includes("cyber") || q.includes("chip") || q.includes("ai ")) return "technology_risk";
+        if (q.includes("climate") || q.includes("earthquake") || q.includes("flood") || q.includes("storm")) return "climate_risk";
+        return "general_assessment";
+      },
+      buildContext() {
+        const rss = STATE.rss || [];
+        const riskRaw = STATE.risk || { score:50, label:"MODERATE", color:"elevated" };
+        const risk = { ...riskRaw, score:Number(riskRaw.score) || 50 };
+        const forex = STATE.forex?.rates || {};
+        const markets = STATE.indiaMarkets || {};
+        const crypto = STATE.crypto || {};
+        const earth = STATE.earth?.features || [];
+        const bharatiya = STATE.bharatiya || [];
+        const byDomain = {};
+        Object.keys(this.DOMAINS).forEach((domain) => { byDomain[domain] = []; });
+        rss.forEach((item) => {
+          const text = ((item.title || "") + " " + (item.summary || "")).toLowerCase();
+          for (const [domain, keywords] of Object.entries(this.DOMAINS)) {
+            if (keywords.some((kw) => text.includes(kw))) {
+              byDomain[domain].push(item);
+              break;
+            }
+          }
+        });
+        const topByDomain = {};
+        Object.entries(byDomain).forEach(([domain, items]) => {
+          topByDomain[domain] = items.sort((a, b) => {
+            const weight = { critical:3, elevated:2, stable:1 };
+            return (weight[b.severity] || 0) - (weight[a.severity] || 0);
+          }).slice(0, 4);
+        });
+        const indiaSignals = rss.filter((item) => item.india).slice(0, 10);
+        const critical = rss.filter((item) => item.severity === "critical").slice(0, 6);
+        const nearIndiaQuakes = earth.filter((feature) => {
+          const [lon, lat] = feature.geometry?.coordinates || [0, 0];
+          const d2r = Math.PI / 180;
+          const dLat = (lat - 20.5937) * d2r;
+          const dLon = (lon - 78.9629) * d2r;
+          const a = Math.sin(dLat / 2) ** 2 + Math.cos(20.5937 * d2r) * Math.cos(lat * d2r) * Math.sin(dLon / 2) ** 2;
+          return 6371 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a)) < 2500 && (feature.properties?.mag || 0) >= 4.5;
+        });
+        const inrRate = Number(forex.INR || 0);
+        const inrStressed = inrRate > this.INDIA_FACTS.inr_stress_threshold;
+        const niftyValue = Number(markets.nifty?.value || 0);
+        const niftyDown = niftyValue && niftyValue < this.INDIA_FACTS.nifty_baseline;
+        return {
+          risk,
+          topByDomain,
+          indiaSignals,
+          critical,
+          nearIndiaQuakes,
+          forex:{ INR:inrRate, inrStressed },
+          markets:{ nifty:niftyValue || null, niftyDown, sensex:markets.sensex?.value, source:markets.source },
+          crypto:{ btcUsd:crypto.bitcoin?.usd, btcChange:crypto.bitcoin?.usd_24h_change },
+          bharatiya,
+          signalCounts:Object.fromEntries(Object.entries(byDomain).map(([domain, items]) => [domain, items.length])),
+          totalSignals:rss.length,
+          timestamp:new Date().toUTCString()
+        };
+      },
+      scoreDomain(domainItems, indiaSignalCount, hasHotspot) {
+        let score = 30;
+        const critical = domainItems.filter((item) => item.severity === "critical").length;
+        const elevated = domainItems.filter((item) => item.severity === "elevated").length;
+        score += Math.min(40, critical * 12 + elevated * 5);
+        score += Math.min(15, indiaSignalCount * 5);
+        if (hasHotspot) score += 10;
+        return Math.min(100, score);
+      },
+      riskLabel(score) {
+        if (score >= 75) return "CRITICAL";
+        if (score >= 60) return "HIGH";
+        if (score >= 40) return "MODERATE";
+        return "LOW";
+      },
+      formatSignal(item, prefix = "-") {
+        const tag = item.severity === "critical" ? "[CRITICAL]" : item.severity === "elevated" ? "[ELEVATED]" : "";
+        const india = item.india ? " [India-linked]" : "";
+        return `${prefix} ${tag}${india} ${item.title} - ${item.source}`.trim();
+      },
+      topN(items, n = 3) {
+        const weight = { critical:3, elevated:2, stable:1 };
+        return [...items].sort((a, b) => (weight[b.severity] || 0) - (weight[a.severity] || 0)).slice(0, n);
+      },
+      answerEnergySecurity(ctx) {
+        const { topByDomain, forex, markets, risk } = ctx;
+        const ecoSignals = topByDomain.economics || [];
+        const defSignals = topByDomain.defense || [];
+        const indiaFacts = this.INDIA_FACTS;
+        const out = [];
+        out.push("## ENERGY SECURITY - INDIA EXPOSURE ASSESSMENT");
+        out.push(`India Impact Score: ${Math.min(100, 55 + risk.score * .3) | 0}/100 | Confidence: ${risk.score > 60 ? "HIGH" : "MEDIUM"} | Freshness: LIVE`);
+        out.push("");
+        out.push(`Situation: India imports approximately ${indiaFacts.crude_import_pct}% of its crude oil. Any disruption to supply routes or price stability immediately raises the landed cost of energy, widens the current account deficit, and pressures the rupee. India holds a Strategic Petroleum Reserve equivalent to roughly ${indiaFacts.spd_days} days of dedicated coverage - below the IEA 90-day benchmark.`);
+        out.push("");
+        out.push("## 1. SUPPLY CHAIN & CHOKEPOINT SIGNALS");
+        const oilSignals = ecoSignals.filter((item) => {
+          const text = ((item.title || "") + " " + (item.summary || "")).toLowerCase();
+          return ["oil","opec","brent","wti","crude","hormuz","gulf","gas","lng","barrel"].some((word) => text.includes(word));
+        });
+        if (oilSignals.length) oilSignals.slice(0, 3).forEach((signal) => out.push(this.formatSignal(signal)));
+        else out.push("- No live oil/chokepoint signals in current feed window. Monitor OPEC+ output decisions and Hormuz transit data.");
+        out.push("");
+        const hormuzSignal = [...ecoSignals, ...defSignals].find((item) => {
+          const text = ((item.title || "") + " " + (item.summary || "")).toLowerCase();
+          return text.includes("hormuz") || text.includes("gulf");
+        });
+        if (hormuzSignal) {
+          out.push(`Strait of Hormuz (India Score 80/100): ${hormuzSignal.title} - ${hormuzSignal.source}`);
+          out.push(`Impact: Disruption to this chokepoint directly threatens the ${indiaFacts.opec_import_share * 100}% of crude that transits Gulf shipping lanes.`);
+        } else out.push("Strait of Hormuz status: No active disruption signals. Standard monitoring posture.");
+        out.push("");
+        out.push("## 2. ECONOMIC & PRICE SIGNALS");
+        if (forex.inrStressed) out.push(`- USD/INR at ${forex.INR.toFixed(2)} - above stress threshold of INR ${indiaFacts.inr_stress_threshold}. Every INR 1 depreciation adds roughly Rs 8,000 crore to the annual crude import bill.`);
+        else if (forex.INR > 0) out.push(`- USD/INR at ${forex.INR.toFixed(2)} - within manageable range. RBI has active intervention capacity.`);
+        if (markets.niftyDown && markets.nifty) out.push(`- NIFTY 50 at ${markets.nifty.toFixed(0)} - below ${indiaFacts.nifty_baseline} baseline, signalling risk-off sentiment that may precede capital outflows.`);
+        ecoSignals.filter((item) => ["inflation","price","cost","tariff","import bill"].some((word) => ((item.title || "") + " " + (item.summary || "")).toLowerCase().includes(word))).slice(0, 2).forEach((signal) => out.push(this.formatSignal(signal)));
+        out.push("");
+        out.push("## 3. POLICY & DIPLOMATIC SIGNALS");
+        const policySignals = (topByDomain.geopolitics || []).filter((item) => item.india);
+        if (policySignals.length) policySignals.slice(0, 2).forEach((signal) => out.push(this.formatSignal(signal)));
+        else out.push("- No India-specific diplomatic energy signals in current window. Watch MEA and PIB feeds for SPR expansion announcements.");
+        out.push("");
+        out.push("## KEY ACTORS");
+        out.push("OPEC+, RBI, MEA India, IAEA, Iran, Saudi Arabia, UAE");
+        out.push("");
+        out.push(`## TREND: ${risk.score > 65 ? "ESCALATING" : risk.score > 40 ? "STABLE" : "DE-ESCALATING"}`);
+        out.push("## STRATEGIC RECOMMENDATION");
+        out.push("Lock in 6-month LNG forward contracts at current spot rates. Activate SPR drawdown protocol if Brent exceeds $95/bbl. RBI should monitor forex reserve levels and adjust NDF market intervention thresholds. Fast-track rupee-denominated settlement channels with alternative crude suppliers.");
+        return out.join("\n");
+      },
+      answerStrategicRisk(ctx) {
+        const { topByDomain, risk, forex, markets, critical } = ctx;
+        const defSignals = topByDomain.defense || [];
+        const geoSignals = topByDomain.geopolitics || [];
+        const out = [];
+        out.push("## STRATEGIC RISK - NSA ASSESSMENT FOR THE PRIME MINISTER");
+        out.push(`India Impact Score: ${risk.score}/100 | Confidence: HIGH | Freshness: LIVE`);
+        out.push("");
+        const pakSignals = [...defSignals, ...geoSignals].filter((item) => ["pakistan","loc","kashmir","isi","ttp","lashkar","jaish"].some((word) => ((item.title || "") + " " + (item.summary || "")).toLowerCase().includes(word)));
+        const chinaSignals = [...defSignals, ...geoSignals].filter((item) => ["china","pla","lac","ladakh","depsang","aksai"].some((word) => ((item.title || "") + " " + (item.summary || "")).toLowerCase().includes(word)));
+        out.push("## MOST CRITICAL STRATEGIC RISK (CURRENT)");
+        if (pakSignals.length >= chinaSignals.length && pakSignals.length > 0) {
+          out.push("PRIMARY: Pakistan-linked signals are the highest-volume active threat vector.");
+          pakSignals.slice(0, 3).forEach((signal) => out.push(this.formatSignal(signal)));
+        } else if (chinaSignals.length > 0) {
+          out.push("PRIMARY: China/LAC signals are the dominant active vector - multi-domain coercion below the threshold of open conflict.");
+          chinaSignals.slice(0, 3).forEach((signal) => out.push(this.formatSignal(signal)));
+        } else if (critical.length > 0) {
+          out.push("PRIMARY: Critical severity signals in the live feed:");
+          critical.slice(0, 3).forEach((signal) => out.push(this.formatSignal(signal)));
+        } else out.push("PRIMARY: No single dominant active threat vector in current signal window. Multi-domain elevated risk from economic and geopolitical streams.");
+        out.push("");
+        out.push("## THREE PRIMARY THREAT VECTORS");
+        out.push("");
+        out.push("VECTOR 1 - Collusive China-Pakistan Pressure");
+        out.push(`Active signals: ${pakSignals.length + chinaSignals.length} defense/geopolitics items. The collusive threat model remains India's primary deterrence planning scenario. PLA infrastructure activity near the LAC combined with Pakistan Army operational tempo creates a two-front monitoring requirement.`);
+        out.push("");
+        out.push("VECTOR 2 - Economic & Supply Chain Vulnerability");
+        const ecoScore = Math.min(100, (topByDomain.economics?.length || 0) * 10 + (forex.inrStressed ? 20 : 0));
+        out.push(`Economic stress score: ${ecoScore}/100. USD/INR: ${forex.INR > 0 ? forex.INR.toFixed(2) : "unavailable"}. ${forex.inrStressed ? "Rupee is under stress - capital outflow risk elevated." : "Rupee within normal range."} China's near-monopoly on critical minerals and OPEC+ pricing power remain structural vulnerabilities.`);
+        out.push("");
+        out.push("VECTOR 3 - Neighbourhood Instability");
+        const neighbourSignals = (topByDomain.geopolitics || []).filter((item) => ["bangladesh","myanmar","nepal","sri lanka","maldives","bhutan"].some((word) => ((item.title || "") + " " + (item.summary || "")).toLowerCase().includes(word)));
+        if (neighbourSignals.length) {
+          out.push("Active neighbourhood signals:");
+          neighbourSignals.slice(0, 2).forEach((signal) => out.push(this.formatSignal(signal)));
+        } else out.push("No active neighbourhood disruption in current feed window. Baseline monitoring posture for the eastern flank (Bangladesh/Myanmar).");
+        out.push("");
+        out.push("## NSA RECOMMENDATIONS TO THE PRIME MINISTER");
+        out.push("");
+        out.push("1. FORMALIZE NSS: Draft and implement a National Security Strategy that synchronizes military, economic, and diplomatic sectors - ending the operational silos between MEA, MoD, and MoF.");
+        out.push("2. ASYMMETRIC DETERRENCE: Shift budgetary priority from manpower-heavy conventional deployments to AI, cyber, space-based ISR, and unmanned drone swarms - capabilities that achieve deterrence without dollar-for-dollar parity with the PLA.");
+        out.push("3. ECONOMIC STATECRAFT: Aggressively diversify critical mineral supply chains through QUAD partnerships. Push for international water treaties on the Brahmaputra. Pre-position SPR expansion from 53 to 65 lakh MT.");
+        out.push("4. NEIGHBOURHOOD STABILIZATION: Deploy economic aid and intelligence assets to prevent radical actors exploiting power vacuums in Bangladesh and Myanmar. Maintain deterrence-by-punishment posture on cross-border terrorism.");
+        out.push("");
+        out.push(`Data Sources: USGS Live, RSS (${ctx.totalSignals} signals), ExchangeRate, ${markets.source || "NSE"}`);
+        return out.join("\n");
+      },
+      answerGeopoliticalRisk(ctx) {
+        const { topByDomain, risk, forex, markets } = ctx;
+        const geoSignals = topByDomain.geopolitics || [];
+        const defSignals = topByDomain.defense || [];
+        const out = [];
+        out.push("## GEOPOLITICAL RISK ASSESSMENT - CURRENT WEEK");
+        out.push(`India Impact Score: ${risk.score}/100 | Confidence: ${risk.score > 60 ? "HIGH" : "MEDIUM"} | Freshness: LIVE`);
+        out.push("");
+        out.push(`Situation: India's geopolitical risk profile is ${risk.score >= 70 ? "ELEVATED" : risk.score >= 45 ? "MODERATE" : "LOW"} based on ${ctx.totalSignals} live signals across ${Object.values(ctx.signalCounts).filter((count) => count > 0).length} active domains.`);
+        out.push("");
+        out.push("## 1. ECONOMIC & ENERGY VULNERABILITY");
+        const oilSignals = (topByDomain.economics || []).filter((item) => ["oil","crude","brent","opec","gas","energy"].some((word) => ((item.title || "") + " " + (item.summary || "")).toLowerCase().includes(word)));
+        if (oilSignals.length) {
+          out.push(`Risk Level: ${oilSignals.some((item) => item.severity === "critical") ? "HIGH" : "MEDIUM"}`);
+          oilSignals.slice(0, 2).forEach((signal) => out.push(this.formatSignal(signal)));
+        } else out.push(`Risk Level: MEDIUM - No live commodity disruption signals, but India's structural exposure to crude imports (${this.INDIA_FACTS.crude_import_pct}% imported) is constant.`);
+        if (forex.INR > 0) out.push(`- USD/INR: ${forex.INR.toFixed(2)} - ${forex.inrStressed ? "STRESS: above INR " + this.INDIA_FACTS.inr_stress_threshold + " threshold." : "Within normal range."}`);
+        if (markets.nifty) out.push(`- NIFTY 50: ${markets.nifty.toFixed(0)} - ${markets.niftyDown ? "Below baseline, risk-off sentiment." : "Above baseline."}`);
+        out.push("");
+        out.push("## 2. DIPLOMATIC & STRATEGIC BALANCE");
+        const dipSignals = geoSignals.filter((item) => item.india || ["jaishankar","modi","mea","un","quad","brics"].some((word) => ((item.title || "") + " " + (item.summary || "")).toLowerCase().includes(word)));
+        if (dipSignals.length) dipSignals.slice(0, 3).forEach((signal) => out.push(this.formatSignal(signal)));
+        else {
+          out.push("- No high-priority India-linked diplomatic signals in current window.");
+          geoSignals.slice(0, 2).forEach((signal) => out.push(this.formatSignal(signal)));
+        }
+        out.push("");
+        out.push("## 3. MARITIME SECURITY");
+        const maritimeSignals = [...geoSignals, ...defSignals].filter((item) => ["shipping","maritime","vessel","strait","sea","port","naval","coast"].some((word) => ((item.title || "") + " " + (item.summary || "")).toLowerCase().includes(word)));
+        if (maritimeSignals.length) {
+          maritimeSignals.slice(0, 2).forEach((signal) => out.push(this.formatSignal(signal)));
+          out.push(`India has ${this.INDIA_FACTS.gulf_diaspora.toLocaleString()} nationals in the Gulf - any maritime disruption triggers both consular and economic responses.`);
+        } else out.push("- No active maritime incident signals. Strait of Hormuz and South China Sea on standard monitoring.");
+        out.push("");
+        out.push("## 4. DEFENSE & BORDER");
+        defSignals.slice(0, 3).forEach((signal) => out.push(this.formatSignal(signal)));
+        if (!defSignals.length) out.push("- No active border/defense incident signals in current feed window.");
+        out.push("");
+        out.push(`## TREND: ${risk.score >= 65 ? "ESCALATING" : risk.score >= 45 ? "STABLE" : "DE-ESCALATING"}`);
+        out.push("## KEY ACTORS");
+        out.push("India, China, Pakistan, Iran, US, OPEC+, EU, UN Security Council");
+        out.push("## STRATEGIC RECOMMENDATION");
+        out.push("Maintain diplomatic back-channels with UAE and Saudi Arabia. Pre-position INS assets in the Arabian Sea on a precautionary basis. Advance QUAD bilateral engagements on maritime domain awareness. Monitor FPI capital flows daily.");
+        return out.join("\n");
+      },
+      answerExternalShocks(ctx) {
+        const { topByDomain, risk, forex, markets, nearIndiaQuakes } = ctx;
+        const shockCandidates = [];
+        const energySignals = (topByDomain.economics || []).filter((item) => ["oil","opec","crude","hormuz","brent","wti","gas","energy","barrel"].some((word) => ((item.title || "") + " " + (item.summary || "")).toLowerCase().includes(word)));
+        const energyScore = energySignals.length * 15 + (forex.inrStressed ? 20 : 0);
+        shockCandidates.push({ type:"energy", score:energyScore, signals:energySignals });
+        const capitalSignals = (topByDomain.economics || []).filter((item) => ["capital","fpi","outflow","dollar","yield","fed","rate"].some((word) => ((item.title || "") + " " + (item.summary || "")).toLowerCase().includes(word)));
+        const capitalScore = (forex.inrStressed ? 40 : 0) + (markets.niftyDown ? 20 : 0) + capitalSignals.length * 10;
+        shockCandidates.push({ type:"capital", score:capitalScore, signals:capitalSignals });
+        const geoSignals = [...(topByDomain.defense || []), ...(topByDomain.geopolitics || [])].filter((item) => item.severity === "critical");
+        const geoScore = (topByDomain.defense || []).filter((item) => item.severity === "critical").length * 20 + (topByDomain.geopolitics || []).filter((item) => item.severity === "critical").length * 15;
+        shockCandidates.push({ type:"geopolitical", score:geoScore, signals:geoSignals });
+        const climateSignals = topByDomain.climate || [];
+        const seismicScore = nearIndiaQuakes.length * 10 + climateSignals.filter((item) => item.severity === "critical").length * 15;
+        shockCandidates.push({ type:"climate", score:seismicScore, signals:climateSignals });
+        const tradeSignals = (topByDomain.economics || []).filter((item) => ["tariff","trade war","export ban","restriction","sanction","wto"].some((word) => ((item.title || "") + " " + (item.summary || "")).toLowerCase().includes(word)));
+        shockCandidates.push({ type:"trade", score:tradeSignals.length * 12, signals:tradeSignals });
+        const top3 = shockCandidates.sort((a, b) => b.score - a.score).slice(0, 3);
+        const descriptions = {
+          energy:{
+            title:"Energy Supply Disruption / Crude Oil Price Shock",
+            impact:`India imports ${this.INDIA_FACTS.crude_import_pct}% of crude. A supply shock immediately widens the CAD and raises domestic inflation. Strategic reserves cover only ${this.INDIA_FACTS.spd_days} days.`,
+            recommendation:"Lock in LNG forward contracts. Activate SPR monitoring. Pre-brief the oil ministry on import diversification options."
+          },
+          capital:{
+            title:"Foreign Capital Outflow & Rupee Depreciation",
+            impact:`Global risk-off sentiment drives FPI withdrawals from Indian equities and bonds. USD/INR is currently ${forex.INR > 0 ? forex.INR.toFixed(2) : "n/a"}${forex.inrStressed ? " and already stressed." : "."}`,
+            recommendation:"RBI should monitor forex reserves. The finance ministry should review short-term debt rollover positions. Alert SEBI on FPI thresholds."
+          },
+          geopolitical:{
+            title:"Regional Military Escalation",
+            impact:"Active conflict signals in the live feed. India has direct exposure through diaspora safety, energy imports, and trade routes.",
+            recommendation:"Activate MEA back-channels. Pre-position consular assets. Monitor military-to-military hotlines."
+          },
+          climate:{
+            title:"Climate / Seismic Event Disrupting Supply Chains",
+            impact:`${nearIndiaQuakes.length > 0 ? nearIndiaQuakes.length + " seismic events within 2500km of India detected in the last 24 hours. " : "No near-India seismic events in the current window. "}Climate disruptions in the Indian Ocean rim can still affect agricultural imports and shipping flows.`,
+            recommendation:"NDMA should verify readiness. Review commodity buffer stocks with FCI."
+          },
+          trade:{
+            title:"US / G7 Trade Restriction or Protectionist Shock",
+            impact:"New tariff or export control actions could affect India-linked supply chains in electronics, pharmaceuticals, or critical minerals.",
+            recommendation:"The commerce ministry should audit sector exposure. Keep the WTO dispute cell on standby."
+          }
+        };
+        const out = [];
+        out.push("## TOP 3 EXTERNAL SHOCKS - 72-HOUR WATCH");
+        out.push(`India Risk Score: ${risk.score}/100 | Active Signals: ${ctx.totalSignals} | Freshness: LIVE`);
+        out.push("");
+        top3.forEach((shock, index) => {
+          const desc = descriptions[shock.type];
+          out.push(`## SHOCK ${index + 1}: ${desc.title.toUpperCase()}`);
+          out.push(`Composite Risk Score: ${Math.min(100, shock.score)}/100`);
+          out.push(`Impact: ${desc.impact}`);
+          if (shock.signals.length > 0) {
+            out.push("Live Signals:");
+            shock.signals.slice(0, 2).forEach((signal) => out.push(this.formatSignal(signal)));
+          } else out.push("Live Signals: No specific triggers in the current window - structural risk remains.");
+          out.push(`Recommendation: ${desc.recommendation}`);
+          out.push("");
+        });
+        out.push("## DATA SOURCES");
+        out.push(`USGS (${ctx.nearIndiaQuakes.length} near-India events), ExchangeRate API, ${markets.source || "NSE"}, RSS Aggregator (${ctx.totalSignals} signals)`);
+        return out.join("\n");
+      },
+      answerDailyBrief(ctx) {
+        const { risk, topByDomain, critical, forex, markets, totalSignals, signalCounts } = ctx;
+        const dateLine = new Date().toLocaleDateString("en-IN", { weekday:"long", year:"numeric", month:"long", day:"numeric" });
+        const domainRisk = {
+          geopolitics:this.scoreDomain(topByDomain.geopolitics || [], 0, true),
+          economics:this.scoreDomain(topByDomain.economics || [], 0, true),
+          defense:this.scoreDomain(topByDomain.defense || [], ctx.indiaSignals.length, true),
+          technology:this.scoreDomain(topByDomain.technology || [], 0, false),
+          climate:this.scoreDomain(topByDomain.climate || [], 0, false)
+        };
+        const trend = risk.score >= 65 ? "ESCALATING" : risk.score >= 45 ? "STABLE" : "DE-ESCALATING";
+        const topCritical = this.topN(critical, 3);
+        const topGeo = this.topN(topByDomain.geopolitics || [], 2);
+        const topEco = this.topN(topByDomain.economics || [], 2);
+        const topDef = this.topN(topByDomain.defense || [], 2);
+        const priorities = [];
+        if (domainRisk.defense >= 60) priorities.push("Maintain dual-front surveillance posture across Pakistan and China vectors with immediate attention to any LoC/LAC escalation signals.");
+        if (domainRisk.economics >= 55 || forex.inrStressed) priorities.push("Tighten macro watch on crude exposure, USD/INR stress, and capital-flow sensitivity over the next 72 hours.");
+        if (ctx.nearIndiaQuakes.length > 0 || domainRisk.climate >= 45) priorities.push("Keep NDMA and logistics planners aligned on climate and seismic disruptions that could affect regional supply chains.");
+        if (!priorities.length) priorities.push("Sustain current monitoring posture while prioritizing verification of the highest-severity live signals.");
+        const out = [];
+        out.push("GOE DAILY STRATEGIC INTELLIGENCE BRIEF");
+        out.push("Date: " + dateLine);
+        out.push("Classification: FOR AUTHORISED PERSONNEL ONLY");
+        out.push("Generated by: GOE Antigravity deterministic brief assembler");
+        out.push("");
+        out.push("EXECUTIVE SUMMARY");
+        out.push(`India's current strategic risk posture is ${risk.label || this.riskLabel(risk.score)} at ${risk.score}/100, derived from ${totalSignals} live signals across geopolitics, economics, defense, technology, and climate domains.`);
+        if (topCritical.length) out.push("Critical drivers: " + topCritical.map((item) => `${item.title} (${item.source})`).join("; ") + ".");
+        else out.push("No critical-severity triggers dominate the live feed window, but structural energy, border, and capital-flow vulnerabilities remain active.");
+        out.push(`Market snapshot: USD/INR ${forex.INR > 0 ? forex.INR.toFixed(2) : "n/a"}${forex.inrStressed ? " (stress)" : ""}; NIFTY 50 ${markets.nifty ? markets.nifty.toFixed(0) : "n/a"}${markets.source ? " via " + markets.source : ""}.`);
+        out.push("");
+        out.push("THREAT MATRIX");
+        out.push(`Geopolitics | ${this.riskLabel(domainRisk.geopolitics)} | Signals ${signalCounts.geopolitics || 0} | Trend ${trend}`);
+        out.push(`Economics | ${this.riskLabel(domainRisk.economics)} | Signals ${signalCounts.economics || 0} | Trend ${forex.inrStressed ? "ESCALATING" : trend}`);
+        out.push(`Defense | ${this.riskLabel(domainRisk.defense)} | Signals ${signalCounts.defense || 0} | Trend ${trend}`);
+        out.push(`Technology | ${this.riskLabel(domainRisk.technology)} | Signals ${signalCounts.technology || 0} | Trend STABLE`);
+        out.push(`Climate | ${this.riskLabel(domainRisk.climate)} | Signals ${signalCounts.climate || 0} | Trend ${ctx.nearIndiaQuakes.length ? "ACTIVE" : "STABLE"}`);
+        out.push("");
+        out.push("STRATEGIC PRIORITIES");
+        priorities.slice(0, 3).forEach((priority, index) => out.push(`${index + 1}. ${priority}`));
+        out.push("");
+        out.push("DOMAIN SNAPSHOT");
+        if (topGeo.length) {
+          out.push("[GEOPOLITICS]");
+          topGeo.forEach((item) => out.push(this.formatSignal(item)));
+          out.push("");
+        }
+        if (topEco.length) {
+          out.push("[ECONOMICS]");
+          topEco.forEach((item) => out.push(this.formatSignal(item)));
+          out.push("");
+        }
+        if (topDef.length) {
+          out.push("[DEFENSE]");
+          topDef.forEach((item) => out.push(this.formatSignal(item)));
+          out.push("");
+        }
+        if ((topByDomain.technology || []).length) {
+          out.push("[TECHNOLOGY]");
+          this.topN(topByDomain.technology || [], 2).forEach((item) => out.push(this.formatSignal(item)));
+          out.push("");
+        }
+        if ((topByDomain.climate || []).length || ctx.nearIndiaQuakes.length) {
+          out.push("[CLIMATE]");
+          this.topN(topByDomain.climate || [], 2).forEach((item) => out.push(this.formatSignal(item)));
+          if (ctx.nearIndiaQuakes.length) out.push(`- ${ctx.nearIndiaQuakes.length} seismic events within 2500 km of India detected in the current live window.`);
+          out.push("");
+        }
+        out.push("END OF BRIEF");
+        return out.join("\n");
+      },
+      answerGeneral(question, intent, ctx) {
+        const { topByDomain, risk, forex, markets, critical } = ctx;
+        const domainMap = {
+          market_analysis:"economics",
+          defense_risk:"defense",
+          technology_risk:"technology",
+          climate_risk:"climate"
+        };
+        const targetDomain = domainMap[intent] || "geopolitics";
+        const signals = topByDomain[targetDomain] || [];
+        const domainLabel = targetDomain.charAt(0).toUpperCase() + targetDomain.slice(1);
+        const out = [];
+        out.push(`## ${domainLabel.toUpperCase()} - GOE LIVE ASSESSMENT`);
+        out.push(`India Impact Score: ${risk.score}/100 | Freshness: LIVE | Signals: ${signals.length} in ${domainLabel}`);
+        out.push("");
+        out.push(`Query: "${question}"`);
+        out.push("");
+        if (signals.length > 0) {
+          out.push("## LIVE SIGNAL CONTEXT");
+          signals.slice(0, 5).forEach((signal) => out.push(this.formatSignal(signal)));
+          out.push("");
+        }
+        out.push("## INDIA RISK SNAPSHOT");
+        out.push(`Overall Risk Score: ${risk.score}/100 (${risk.label})`);
+        if (forex.INR > 0) out.push(`USD/INR: ${forex.INR.toFixed(2)}${forex.inrStressed ? " - STRESS" : ""}`);
+        if (markets.nifty) out.push(`NIFTY 50: ${markets.nifty.toFixed(0)} via ${markets.source || "proxy"}`);
+        out.push("");
+        if (critical.length > 0) {
+          out.push("## CRITICAL ACTIVE SIGNALS");
+          critical.slice(0, 3).forEach((signal) => out.push(this.formatSignal(signal)));
+          out.push("");
+        }
+        out.push(`## TREND: ${risk.score >= 65 ? "ESCALATING" : risk.score >= 45 ? "STABLE" : "DE-ESCALATING"}`);
+        out.push(`GOE Antigravity engine - no LLM, live data grounded. Signals: ${ctx.totalSignals} total from RSS, USGS, ExchangeRate, CoinGecko.`);
+        return out.join("\n");
+      },
+      async answer(question) {
+        const prompt = question || "";
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 3000);
+        try {
+          const response = await fetch("http://localhost:8000/api/v1/analyst/query", {
+            method:"POST",
+            headers:{ "Content-Type":"application/json" },
+            body:JSON.stringify({ question:prompt, context:await context(1600) }),
+            signal:controller.signal
+          });
+          if (response.ok) {
+            const data = await response.json();
+            if (data.answer) return data.answer;
+            if (data.response) return data.response;
+          }
+        } catch {}
+        finally {
+          clearTimeout(timeoutId);
+        }
+        const ctx = this.buildContext();
+        const intent = this.classifyIntent(prompt);
+        switch (intent) {
+          case "daily_brief":
+            return this.answerDailyBrief(ctx);
+          case "energy_security":
+            return this.answerEnergySecurity(ctx);
+          case "strategic_risk":
+            return this.answerStrategicRisk(ctx);
+          case "geopolitical_risk":
+            return this.answerGeopoliticalRisk(ctx);
+          case "external_shocks":
+            return this.answerExternalShocks(ctx);
+          default:
+            return this.answerGeneral(prompt, intent, ctx);
+        }
+      }
+    };
+    const SYSTEM_PROMPT = `You are GOE-1, the Global Ontology Engine Strategic Intelligence Analyst.
+Use only the provided live context plus the user query. Never invent statistics.
+Clearly distinguish confirmed data from assessed inference.
+Prefer specific, actionable, time-bound analysis over generic commentary.
+
+Response format:
+## [DOMAIN] - [HEADLINE]
+India Impact Score: X/100 | Confidence: HIGH/MEDIUM/LOW | Freshness: LIVE/1H/6H/24H
+Situation: ...
+Key Actors: ...
+India Exposure: ...
+Trend: ESCALATING/STABLE/DE-ESCALATING
+Data Sources: ...
+Strategic Recommendation: ...`;
+    const DATA = {
+      sourceHealth:{},
+      feeds:{
+        india_english:[
+          { name:"PIB India", url:"https://pib.gov.in/RssMain.aspx?ModId=6&Lang=1&Regid=3" },
+          { name:"The Hindu National", url:"https://www.thehindu.com/news/national/feeder/default.rss" },
+          { name:"Economic Times Nation", url:"https://economictimes.indiatimes.com/news/politics-and-nation/rssfeeds/1052732854.cms" },
+          { name:"MEA India", url:"https://www.mea.gov.in/rss/pressreleases-rss.aspx" },
+          { name:"RBI Press", url:"https://www.rbi.org.in/Scripts/RSS.aspx?Id=316" }
+        ],
+        india_hindi:[
+          { name:"Dainik Bhaskar", url:"https://www.bhaskar.com/rss-feed/1061/" },
+          { name:"Amar Ujala", url:"https://www.amarujala.com/rss/breaking-news.xml" },
+          { name:"NavBharat Times", url:"https://navbharattimes.indiatimes.com/rssarticleshow/48731087.cms" }
+        ],
+        india_bengali:[
+          { name:"Ananda Bazar", url:"https://www.anandabazar.com/feeds/google/ABPLTD01.xml" },
+          { name:"Ei Samay", url:"https://eisamay.com/feeds/google/ABPLTD01.xml" }
+        ],
+        india_tamil:[
+          { name:"Dinamalar", url:"https://www.dinamalar.com/rss/rss.xml" },
+          { name:"Dinakaran", url:"https://www.dinakaran.com/rss.xml" }
+        ],
+        india_urdu:[
+          { name:"Jang", url:"https://jang.com.pk/rss/1.xml" },
+          { name:"BBC Urdu", url:"https://feeds.bbci.co.uk/urdu/rss.xml" }
+        ],
+        global_security:[
+          { name:"BBC World", url:"https://feeds.bbci.co.uk/news/world/rss.xml" },
+          { name:"Reuters World", url:"https://feeds.reuters.com/reuters/worldNews" },
+          { name:"Al Jazeera", url:"https://www.aljazeera.com/xml/rss/all.xml" },
+          { name:"AP Top Stories", url:"https://feeds.apnews.com/rss/APTopNews" }
+        ],
+        economics:[
+          { name:"Financial Times", url:"https://www.ft.com/?format=rss" },
+          { name:"Moneycontrol", url:"https://www.moneycontrol.com/rss/economy.xml" },
+          { name:"Livemint", url:"https://www.livemint.com/rss/economics" }
+        ],
+        defense:[
+          { name:"Defense News", url:"https://www.defensenews.com/arc/outboundfeeds/rss/?outputType=xml" },
+          { name:"Breaking Defense", url:"https://breakingdefense.com/feed/" },
+          { name:"War on the Rocks", url:"https://warontherocks.com/feed/" },
+          { name:"The Diplomat", url:"https://thediplomat.com/feed/" }
+        ],
+        climate:[
+          { name:"NASA Climate", url:"https://climate.nasa.gov/news/rss.xml" },
+          { name:"NOAA News", url:"https://www.noaa.gov/news/rss.xml" }
+        ],
+        technology:[
+          { name:"MIT Technology Review", url:"https://www.technologyreview.com/feed/" },
+          { name:"ISRO News", url:"https://www.isro.gov.in/rss-feeds" },
+          { name:"Hacker News", url:"https://hnrss.org/frontpage" },
+          { name:"Wired", url:"https://www.wired.com/feed/rss" }
+        ]
+      },
+      ok(name, detail = "Live") { this.sourceHealth[name] = { status:"online", detail, at:new Date().toLocaleTimeString("en-IN") }; },
+      fail(name, detail = "Unavailable") { this.sourceHealth[name] = { status:"error", detail, at:new Date().toLocaleTimeString("en-IN") }; },
+      async earthquakes(force = false) {
+        if (force) CACHE.del("earth");
+        const cached = CACHE.get("earth"); if (cached) return cached;
+        try {
+          const r = await timedFetch("https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/2.5_day.geojson", {}, 10000);
+          const data = await r.json(); CACHE.set("earth", data, TTL.EARTHQUAKES); this.ok("USGS", "Updated from live feed"); return data;
+        } catch {
+          const stale = CACHE.stale("earth"); if (stale) return stale.data;
+          this.fail("USGS", "No live or stale data"); return { features:[], metadata:{ count:0 } };
+        }
+      },
+      async crypto(force = false) {
+        if (force) CACHE.del("crypto");
+        const cached = CACHE.get("crypto"); if (cached) return cached;
+        try {
+          const r = await timedFetch("https://api.coingecko.com/api/v3/simple/price?ids=bitcoin,ethereum,solana,ripple,cardano&vs_currencies=usd,inr&include_24hr_change=true&include_market_cap=true", {}, 10000);
+          const data = await r.json(); CACHE.set("crypto", data, TTL.CRYPTO); this.ok("CoinGecko", "Spot prices live"); return data;
+        } catch {
+          const stale = CACHE.stale("crypto"); if (stale) return stale.data;
+          this.fail("CoinGecko", "No live or stale data"); return {};
+        }
+      },
+      async cryptoHistory(force = false) {
+        if (force) CACHE.del("history");
+        const cached = CACHE.get("history"); if (cached) return cached;
+        try {
+          const r = await timedFetch("https://api.coingecko.com/api/v3/coins/bitcoin/market_chart?vs_currency=usd&days=7&interval=daily", {}, 10000);
+          const data = await r.json(); CACHE.set("history", data, TTL.CRYPTO_HISTORY); this.ok("CoinGecko History", "7-day BTC history live"); return data;
+        } catch {
+          const stale = CACHE.stale("history"); if (stale) return stale.data;
+          this.fail("CoinGecko History", "Unavailable"); return { prices:[] };
+        }
+      },
+      async forex(force = false) {
+        if (force) CACHE.del("forex");
+        const cached = CACHE.get("forex"); if (cached) return cached;
+        try {
+          const r = await timedFetch("https://open.er-api.com/v6/latest/USD", {}, 8000);
+          const data = await r.json(); CACHE.set("forex", data, TTL.FOREX); this.ok("ExchangeRate", "USD base rate live"); return data;
+        } catch {
+          const stale = CACHE.stale("forex"); if (stale) return stale.data;
+          this.fail("ExchangeRate", "Unavailable"); return { rates:{} };
+        }
+      },
+      async indiaMarkets(force = false) {
+        if (force) CACHE.del("indiaMarkets");
+        const cached = CACHE.get("indiaMarkets"); if (cached) return cached;
+        try {
+          const proxied = "https://corsproxy.io/?url=" + encodeURIComponent("https://www.nseindia.com/api/allIndices");
+          const r = await timedFetch(proxied, {}, 10000);
+          const data = await r.json();
+          const nifty = (data.data || []).find((i) => i.index === "NIFTY 50");
+          const sensex = (data.data || []).find((i) => i.index === "S&P BSE SENSEX") || (data.data || []).find((i) => String(i.index || "").includes("SENSEX"));
+          const result = {
+            nifty:{ value:nifty ? Number(nifty.last) : null, change:nifty ? Number(nifty.change) : null, pChange:nifty ? Number(nifty.percentChange) : null },
+            sensex:{ value:sensex ? Number(sensex.last) : null, change:sensex ? Number(sensex.change) : null, pChange:sensex ? Number(sensex.percentChange) : null },
+            timestamp:new Date().toLocaleTimeString("en-IN"), source:"NSE India"
+          };
+          CACHE.set("indiaMarkets", result, TTL.NIFTY); this.ok("NSE", "NSE allIndices via proxy"); return result;
+        } catch { return this.indiaMarketsFallback(); }
+      },
+      async indiaMarketsFallback() {
+        try {
+          const proxied = "https://corsproxy.io/?url=" + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?interval=5m&range=1d");
+          const r = await timedFetch(proxied, {}, 10000);
+          const data = await r.json();
+          const meta = data && data.chart && data.chart.result && data.chart.result[0] ? data.chart.result[0].meta : null;
+          const result = { nifty:{ value:meta ? meta.regularMarketPrice : null, change:null, pChange:null }, sensex:{ value:null, change:null, pChange:null }, timestamp:new Date().toLocaleTimeString("en-IN"), source:"Yahoo Finance fallback" };
+          CACHE.set("indiaMarkets", result, TTL.NIFTY); this.ok("NSE", "Yahoo fallback active"); return result;
+        } catch {
+          const stale = CACHE.stale("indiaMarkets"); if (stale) return stale.data;
+          this.fail("NSE", "Unavailable"); return { nifty:{ value:null }, sensex:{ value:null }, timestamp:null, source:"Unavailable" };
+        }
+      },
+      async weather(force = false) {
+        if (force) CACHE.del("weather");
+        const cached = CACHE.get("weather"); if (cached) return cached;
+        try {
+          const url = "https://api.open-meteo.com/v1/forecast?latitude=28.6139&longitude=77.2090&current_weather=true&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=Asia%2FKolkata&forecast_days=3";
+          const r = await timedFetch(url, {}, 8000);
+          const data = await r.json(); CACHE.set("weather", data, TTL.WEATHER); this.ok("Open-Meteo", "Delhi weather live"); return data;
+        } catch {
+          const stale = CACHE.stale("weather"); if (stale) return stale.data;
+          this.fail("Open-Meteo", "Unavailable"); return null;
+        }
+      },
+      async countries(force = false) {
+        if (force) CACHE.del("countries");
+        const cached = CACHE.get("countries"); if (cached) return cached;
+        try {
+          const url = "https://restcountries.com/v3.1/all?fields=name,cca3,cca2,population,region,subregion,latlng,area,capital";
+          const r = await timedFetch(url, {}, 12000);
+          const data = await r.json(); const map = {};
+          data.forEach((c) => { if (c && c.cca3) map[c.cca3] = c; });
+          CACHE.set("countries", map, TTL.COUNTRIES); this.ok("REST Countries", "Reference metadata live"); return map;
+        } catch {
+          const stale = CACHE.stale("countries"); if (stale) return stale.data;
+          this.fail("REST Countries", "Unavailable"); return {};
+        }
+      }
+    };
+    DATA.feed = async function(group, feed, force = false) {
+      const key = "rss_" + group + "_" + norm(feed.name);
+      if (force) CACHE.del(key);
+      const cached = CACHE.get(key); if (cached) return cached;
+      try {
+        const proxied = "https://corsproxy.io/?url=" + encodeURIComponent(feed.url);
+        const r = await timedFetch(proxied, {}, 9000);
+        const text = await r.text();
+        const xml = new DOMParser().parseFromString(text, "text/xml");
+        const entries = [...xml.querySelectorAll("item, entry")].slice(0, 12);
+        const items = entries.map((entry) => {
+          const title = clean(entry.querySelector("title")?.textContent || "");
+          const summary = clean(entry.querySelector("description, summary")?.textContent || "");
+          const linkNode = entry.querySelector("link");
+          const link = clean(linkNode?.getAttribute("href") || linkNode?.textContent || "");
+          const pub = clean(entry.querySelector("pubDate, published, updated")?.textContent || new Date().toISOString());
+          const language = langOf(group);
+          const domain = group.startsWith("india_") ? (language === "english" ? classify(title + " " + summary, "india") : "bharatiya") : classify(title + " " + summary, group);
+          return {
+            title, summary, url:link, published:new Date(pub).toISOString(), source:feed.name, group, language, domain,
+            severity:severityOf(title + " " + summary), india:isIndia(title + " " + summary) || group.startsWith("india_")
+          };
+        }).filter((item) => item.title && item.title.length > 8);
+        CACHE.set(key, items, TTL.RSS); this.ok(feed.name, "RSS live"); return items;
+      } catch {
+        const stale = CACHE.stale(key); if (stale) return stale.data;
+        this.fail(feed.name, "RSS unavailable"); return [];
+      }
+    };
+    DATA.allRss = async function(force = false) {
+      const tasks = [];
+      Object.entries(this.feeds).forEach(([group, feeds]) => feeds.forEach((feed) => tasks.push(this.feed(group, feed, force))));
+      const settled = await Promise.allSettled(tasks);
+      const seen = new Set();
+      const items = [];
+      settled.forEach((result) => {
+        if (result.status !== "fulfilled") return;
+        result.value.forEach((item) => {
+          const key = norm(item.title);
+          if (!key || seen.has(key)) return;
+          seen.add(key);
+          items.push(item);
+        });
+      });
+      return items.sort((a, b) => new Date(b.published) - new Date(a.published));
+    };
+    const BHARATIYA = {
+      async translate(item) {
+        const key = "bharatiya_" + norm(item.title).slice(0, 120);
+        const cached = CACHE.get(key); if (cached) return cached;
+        if (AI.config.mode === "none" || item.language === "english") {
+          const fallback = { ...item, translated_title:item.title, translated_summary:item.summary, translation_mode:AI.config.mode === "none" ? "ai-unavailable" : "original", india_score:item.india ? 75 : 50, risk_tag:item.severity.toUpperCase() };
+          CACHE.set(key, fallback, TTL.RSS); return fallback;
+        }
+        try {
+          const prompt = `Translate this regional-language news item into concise English for an Indian strategic analyst.
+Return JSON with keys "headline", "summary", "india_score", and "risk_tag".
+
+Title: ${item.title}
+Summary: ${item.summary || "No summary available."}`;
+          const reply = await AI.call([{ role:"user", content:prompt }], "You are a translator for Indian strategic media feeds. Return valid JSON only.", 400);
+          const parsed = jsonFrom(reply) || {};
+          const translated = { ...item, translated_title:parsed.headline || item.title, translated_summary:parsed.summary || item.summary || item.title, translation_mode:AI.config.mode, india_score:typeof parsed.india_score === "number" ? parsed.india_score : (item.india ? 78 : 55), risk_tag:parsed.risk_tag || item.severity.toUpperCase() };
+          CACHE.set(key, translated, TTL.RSS); return translated;
+        } catch {
+          return { ...item, translated_title:item.title, translated_summary:item.summary, translation_mode:"fallback", india_score:item.india ? 70 : 50, risk_tag:item.severity.toUpperCase() };
+        }
+      },
+      async refresh() {
+        const selected = STATE.rss.filter((item) => item.language !== "english" && STATE.activeLanguages.has(item.language)).slice(0, 8);
+        const translated = [];
+        for (const item of selected) translated.push(await this.translate(item));
+        STATE.bharatiya = translated.sort((a, b) => (b.india_score || 0) - (a.india_score || 0));
+      }
+    };
+    function loadSession(key, fallback) { try { const raw = sessionStorage.getItem(key); return raw ? JSON.parse(raw) : fallback; } catch { return fallback; } }
+    function saveSession(key, value) { try { sessionStorage.setItem(key, JSON.stringify(value)); } catch {} }
+    function timedFetch(url, options = {}, timeout = 8000) {
+      const controller = new AbortController(); const id = setTimeout(() => controller.abort(), timeout);
+      return fetch(url, { ...options, signal:controller.signal }).finally(() => clearTimeout(id));
+    }
+    function esc(v) { return String(v || "").replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;"); }
+    function clean(v) { return String(v || "").replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim(); }
+    function norm(v) { return String(v || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim(); }
+    function fmt(v, d = 0) { return v === null || v === undefined || Number.isNaN(Number(v)) ? "n/a" : Number(v).toLocaleString("en-IN", { maximumFractionDigits:d, minimumFractionDigits:d }); }
+    function signed(v, d = 2, suffix = "%") { return v === null || v === undefined || Number.isNaN(Number(v)) ? "n/a" : (Number(v) > 0 ? "+" : "") + Number(v).toFixed(d) + suffix; }
+    function ago(v) { const date = new Date(v); if (Number.isNaN(date.getTime())) return "unknown"; const min = Math.round((Date.now() - date.getTime()) / 60000); if (min <= 1) return "just now"; if (min < 60) return min + "m ago"; const hr = Math.round(min / 60); if (hr < 24) return hr + "h ago"; return Math.round(hr / 24) + "d ago"; }
+    function labelOf(domain) { return { all:"All", india:"India", bharatiya:"Bharatiya", geopolitics:"Geopolitics", economics:"Economics", defense:"Defense", technology:"Technology", climate:"Climate", society:"Society" }[domain] || domain; }
+    function langOf(group) { if (group.includes("hindi")) return "hindi"; if (group.includes("bengali")) return "bengali"; if (group.includes("tamil")) return "tamil"; if (group.includes("urdu")) return "urdu"; return "english"; }
+    function classify(text, hint = "") {
+      const value = (text + " " + hint).toLowerCase();
+      const rules = [
+        { id:"defense", words:["missile","army","navy","air force","strike","drdo","military","nuclear","defense","border","loc","lac"] },
+        { id:"technology", words:["ai","chip","semiconductor","isro","space","technology","cyber","satellite"] },
+        { id:"economics", words:["market","inflation","rbi","economy","trade","rupee","stock","forex","budget","oil"] },
+        { id:"climate", words:["earthquake","storm","flood","heat","weather","climate","wildfire","typhoon"] },
+        { id:"india", words:["india","indian","delhi","modi","jaishankar","nse","sensex","nifty"] },
+        { id:"geopolitics", words:["war","summit","china","pakistan","ukraine","iran","taiwan","nato","diplom","sanction"] }
+      ];
+      for (const rule of rules) if (rule.words.some((w) => value.includes(w))) return rule.id;
+      return "society";
+    }
+    function severityOf(text) {
+      const value = text.toLowerCase();
+      if (["nuclear","invasion","war","missile","airstrike","strike","blockade","critical","ceasefire violation"].some((w) => value.includes(w))) return "critical";
+      if (["border","quake","earthquake","storm","flood","sanction","military","escalat","warning"].some((w) => value.includes(w))) return "elevated";
+      return "stable";
+    }
+    function isIndia(text) { const value = text.toLowerCase(); return ["india","indian","delhi","modi","rbi","drdo","isro","nse","loc","lac","pakistan","china"].some((w) => value.includes(w)); }
+    function jsonFrom(text) {
+      if (!text) return null;
+      const cleaned = text.replace(/```json|```/gi, "").trim(); const start = cleaned.indexOf("{"); const end = cleaned.lastIndexOf("}");
+      if (start === -1 || end === -1 || end <= start) return null;
+      try { return JSON.parse(cleaned.slice(start, end + 1)); } catch { return null; }
+    }
+    function tagClass(severity) { return severity === "critical" ? "critical" : severity === "elevated" ? "elevated" : severity === "stable" ? "stable" : "info"; }
+    function download(name, content, mime = "text/plain") {
+      const blob = new Blob([content], { type:mime }); const url = URL.createObjectURL(blob);
+      const a = document.createElement("a"); a.href = url; a.download = name; a.click(); URL.revokeObjectURL(url);
+    }
+    function setAiStatus(text, mode) {
+      const dot = document.getElementById("aiDot"); dot.className = "dot"; if (mode) dot.classList.add(mode);
+      document.getElementById("aiText").textContent = text; document.getElementById("sideAi").textContent = text; document.getElementById("chatMode").textContent = text;
+    }
+    function showAiModal() { document.getElementById("aiModal").classList.remove("hidden"); }
+    function hideAiModal() { document.getElementById("aiModal").classList.add("hidden"); }
+    function markRefresh() { STATE.lastRefresh = new Date().toLocaleTimeString("en-IN"); document.getElementById("lastRefresh").textContent = "Last refresh: " + STATE.lastRefresh; }
+    function setClock() { document.getElementById("clock").textContent = new Date().toLocaleString("en-IN", { hour:"2-digit", minute:"2-digit", second:"2-digit", weekday:"short" }); }
+    async function computeRisk() {
+      const nearby = (STATE.earth.features || []).filter((f) => {
+        const c = f.geometry?.coordinates || []; const mag = Number(f.properties?.mag || 0);
+        return mag >= 5 && distance(Number(c[1]), Number(c[0]), 20.5937, 78.9629) < 2000;
+      });
+      const seismic = Math.min(10, nearby.length * 3);
+      const defenseHits = STATE.rss.filter((item) => {
+        const text = (item.title + " " + item.summary).toLowerCase();
+        return ["loc","lac","border","missile","strike","conflict","kashmir","arunachal","pakistan","pla"].some((w) => text.includes(w)) && isIndia(text);
+      }).length;
+      const defense = Math.min(30, defenseHits * 4);
+      const inr = STATE.forex?.rates?.INR || 0;
+      let economic = 15; if (inr > 87) economic = 25; else if (inr > 85) economic = 20; else if (inr < 82 && inr > 0) economic = 8;
+      const global = Math.min(20, STATE.rss.filter((item) => ["nuclear","war","iran","taiwan","ukraine","nato","blockade","sanction"].some((w) => (item.title + " " + item.summary).toLowerCase().includes(w))).length * 2);
+      const bharatiya = Math.min(15, STATE.bharatiya.filter((item) => ["border","security","violence","army","warning","crisis","protest"].some((w) => ((item.translated_title || item.title) + " " + (item.translated_summary || item.summary)).toLowerCase().includes(w))).length * 3 || 4);
+      let score = Math.max(0, Math.min(100, seismic + defense + economic + global + bharatiya));
+      const color = score >= 70 ? "critical" : score >= 40 ? "elevated" : "stable";
+      const label = score >= 70 ? "ELEVATED" : score >= 40 ? "MODERATE" : "LOW";
+      STATE.risk = { score, color, label, components:{ seismic, defense, economic, global, bharatiya } };
+      return STATE.risk;
+    }
+    async function context(maxChars = 1800) {
+      const parts = ["=== GOE LIVE INTELLIGENCE CONTEXT - " + new Date().toUTCString() + " ==="];
+      if (STATE.risk) parts.push("INDIA RISK SCORE: " + STATE.risk.score + "/100 (" + STATE.risk.label + ")");
+      if (STATE.forex?.rates?.INR) parts.push("USD/INR: " + Number(STATE.forex.rates.INR).toFixed(2) + " from open.er-api.");
+      if (STATE.crypto?.bitcoin) parts.push("BTC: $" + fmt(STATE.crypto.bitcoin.usd, 0) + " / INR " + fmt(STATE.crypto.bitcoin.inr, 0) + " (" + signed(STATE.crypto.bitcoin.usd_24h_change, 1) + ").");
+      if (STATE.indiaMarkets?.nifty?.value) parts.push("NIFTY 50: " + fmt(STATE.indiaMarkets.nifty.value, 2) + " (" + signed(STATE.indiaMarkets.nifty.pChange, 2) + ") source " + STATE.indiaMarkets.source + ".");
+      const signals = STATE.rss.filter((item) => ["india","pakistan","china","iran","ukraine","nuclear","war","missile","loc","lac","strait"].some((w) => (item.title + " " + item.summary).toLowerCase().includes(w))).slice(0, 8);
+      if (signals.length) {
+        parts.push("TOP REAL-TIME SIGNALS:");
+        signals.forEach((item) => parts.push("[" + item.source + "] " + item.title));
+      }
+      const topQuakes = (STATE.earth.features || []).slice(0, 3).map((f) => "M" + Number(f.properties.mag || 0).toFixed(1) + " " + f.properties.place);
+      if (topQuakes.length) parts.push("USGS SEISMIC: " + topQuakes.join(" | "));
+      if (STATE.bharatiya.length) {
+        parts.push("BHARATIYA SIGNALS:");
+        STATE.bharatiya.slice(0, 3).forEach((item) => parts.push("[" + item.source + "] " + (item.translated_title || item.title)));
+      }
+      parts.push("=== END CONTEXT ===");
+      return parts.join("\n").slice(0, maxChars);
+    }
+    function distance(lat1, lon1, lat2, lon2) {
+      const r = 6371, dLat = (lat2 - lat1) * Math.PI / 180, dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) ** 2;
+      return r * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    }
+    function sourceHtml(name, item) {
+      const cls = item.status === "online" ? "stable" : item.status === "warn" ? "elevated" : "critical";
+      const detail = item.at ? item.detail + " - " + item.at : item.detail;
+      return '<div class="source"><div class="panel-body"><div class="split"><div style="font-size:12px;font-weight:600;">' + esc(name) + '</div><span class="tag ' + cls + '">' + esc(item.status) + '</span></div><div class="small muted" style="margin-top:6px;">' + esc(detail) + "</div></div></div>";
+    }
+    function intelHtml(item, translated = false) {
+      const title = translated ? (item.translated_title || item.title) : item.title;
+      const summary = translated ? (item.translated_summary || item.summary || item.title) : (item.summary || "No summary available in current feed.");
+      const linkStart = item.url ? '<a class="feed-link" href="' + esc(item.url) + '" target="_blank" rel="noreferrer">' : "<span>";
+      const linkEnd = item.url ? "</a>" : "</span>";
+      return '<article class="intel"><div class="intel-top"><h3>' + linkStart + esc(title) + linkEnd + '</h3><span class="tag ' + tagClass(item.severity) + '">' + esc(item.severity) + '</span></div><div class="muted small" style="font-size:13px;line-height:1.6;">' + esc(summary) + '</div><div class="meta-row"><span>' + esc(item.source) + '</span><span>' + esc(labelOf(item.domain)) + '</span><span>' + esc(ago(item.published)) + '</span>' + (item.india ? "<span>India-linked</span>" : "") + (translated ? "<span>Translation</span>" : "") + "</div></article>";
+    }
+    function miniMetric(title, value, detail) {
+      return '<div class="mini"><div class="panel-body"><h3>' + esc(title) + '</h3><div style="font-family:var(--font-display);font-size:24px;font-weight:800;color:var(--saffron);margin:8px 0;">' + esc(value) + '</div><div class="small muted">' + esc(detail) + "</div></div></div>";
+    }
+    function renderFilters() {
+      const html = STATE.domains.map((item) => '<button class="chip ' + (STATE.filter === item.id ? "active" : "") + '" type="button" data-domain="' + item.id + '">' + esc(item.label) + "</button>").join("");
+      document.getElementById("domainFilters").innerHTML = html;
+      document.getElementById("intelFilters").innerHTML = html;
+    }
+    function renderLanguageToggles() {
+      const items = [
+        { id:"hindi", label:"Hindi", detail:"Dainik Bhaskar, Amar Ujala, NavBharat Times" },
+        { id:"bengali", label:"Bengali", detail:"Ananda Bazar, Ei Samay" },
+        { id:"tamil", label:"Tamil", detail:"Dinamalar, Dinakaran" },
+        { id:"urdu", label:"Urdu", detail:"Jang, BBC Urdu" }
+      ];
+      document.getElementById("languageToggles").innerHTML = items.map((item) => '<div class="toggle"><label><strong>' + esc(item.label) + '</strong><span>' + esc(item.detail) + '</span></label><input type="checkbox" data-language="' + item.id + '"' + (STATE.activeLanguages.has(item.id) ? " checked" : "") + " /></div>").join("");
+    }
+    function renderTicker() {
+      const items = [];
+      if (STATE.indiaMarkets?.nifty?.value) items.push({ label:"NIFTY 50", value:fmt(STATE.indiaMarkets.nifty.value, 2), delta:signed(STATE.indiaMarkets.nifty.pChange, 2), up:(STATE.indiaMarkets.nifty.pChange || 0) >= 0 });
+      if (STATE.indiaMarkets?.sensex?.value) items.push({ label:"SENSEX", value:fmt(STATE.indiaMarkets.sensex.value, 2), delta:signed(STATE.indiaMarkets.sensex.pChange, 2), up:(STATE.indiaMarkets.sensex.pChange || 0) >= 0 });
+      if (STATE.forex?.rates?.INR) items.push({ label:"USD/INR", value:Number(STATE.forex.rates.INR).toFixed(2), delta:"ECB feed", up:true });
+      if (STATE.crypto?.bitcoin) items.push({ label:"BTC/USD", value:"$" + fmt(STATE.crypto.bitcoin.usd, 0), delta:signed(STATE.crypto.bitcoin.usd_24h_change, 2), up:(STATE.crypto.bitcoin.usd_24h_change || 0) >= 0 });
+      STATE.rss.slice(0, 6).forEach((item) => items.push({ label:item.source, value:item.title, headline:true }));
+      if (!items.length) items.push({ label:"GOE", value:"Waiting for live signals", delta:"boot", up:true });
+      document.getElementById("tickerTrack").innerHTML = [...items, ...items].map((item) => item.headline ? '<div><span class="ticker-label">' + esc(item.label) + '</span> ' + esc(item.value) + '</div>' : '<div><span class="ticker-label">' + esc(item.label) + '</span> ' + esc(item.value) + ' <span class="' + (item.up ? "ticker-up" : "ticker-down") + '">' + esc(item.delta) + "</span></div>").join("");
+    }
+    function renderSourceHealth() {
+      const names = ["USGS","CoinGecko","CoinGecko History","ExchangeRate","NSE","Open-Meteo","REST Countries","PIB India","RBI Press","BBC World","Reuters World","Defense News"];
+      document.getElementById("sourceHealth").innerHTML = names.map((name) => sourceHtml(name, DATA.sourceHealth[name] || { status:"warn", detail:"Awaiting refresh", at:"" })).join("");
+      const stats = CACHE.stats();
+      document.getElementById("cacheState").textContent = stats.live + " live cache entries of " + stats.total + " total.";
+    }
+    function renderOverview() {
+      const risk = STATE.risk || { score:"--", label:"pending", color:"info", components:{} };
+      document.getElementById("overviewMetrics").innerHTML = [
+        { label:"USGS Seismic Count", value:fmt(STATE.earth.metadata?.count || 0), foot:"USGS M2.5+ in the last day.", cls:"stable" },
+        { label:"Live RSS Signals", value:fmt(STATE.rss.length), foot:"Unique RSS cards across all feeds.", cls:"stable" },
+        { label:"India Risk Score", value:String(risk.score), foot:risk.label + " computed from live signals.", cls:risk.color },
+        { label:"Critical Signals", value:fmt(STATE.critical.length), foot:"Critical or elevated cards in cache.", cls:"critical" }
+      ].map((item) => '<div class="metric"><div class="metric-kicker">' + esc(item.label) + '</div><div class="metric-value" style="color:' + (item.cls === "critical" ? "var(--alert-red)" : item.cls === "elevated" ? "var(--alert-amber)" : item.cls === "stable" ? "var(--phosphor)" : "var(--alert-blue)") + ';">' + esc(item.value) + '</div><div class="metric-foot">' + esc(item.foot) + "</div></div>").join("");
+      const lines = [
+        "Live refresh: " + (STATE.lastRefresh || "pending"),
+        STATE.indiaMarkets?.nifty?.value ? "NIFTY 50 is at " + fmt(STATE.indiaMarkets.nifty.value, 2) + " via " + STATE.indiaMarkets.source + "." : "NIFTY 50 is not available yet; GOE is waiting for the proxy or fallback source.",
+        STATE.forex?.rates?.INR ? "USD/INR is " + Number(STATE.forex.rates.INR).toFixed(2) + " from open.er-api." : "USD/INR has not arrived yet.",
+        STATE.earth.features.length ? "Latest USGS event: M" + Number(STATE.earth.features[0].properties.mag || 0).toFixed(1) + " " + STATE.earth.features[0].properties.place + "." : "USGS feed has not returned any events yet.",
+        STATE.critical.length ? "Top critical signal: " + STATE.critical[0].title : "No critical RSS items are currently classified in cache."
+      ];
+      document.getElementById("overviewSnapshot").innerHTML = lines.map((line) => '<div class="brief-item"><div class="panel-body">' + esc(line) + "</div></div>").join("");
+      document.getElementById("overviewBharatiya").innerHTML = STATE.bharatiya.length ? STATE.bharatiya.slice(0, 3).map((item) => intelHtml(item, true)).join("") : '<div class="loading">No active translated Bharatiya feed items yet.</div>';
+      document.getElementById("overviewCritical").innerHTML = STATE.critical.length ? STATE.critical.slice(0, 6).map((item) => intelHtml(item)).join("") : '<div class="loading">No critical cards yet.</div>';
+    }
+    function renderIntelligence() {
+      let items = STATE.rss;
+      if (STATE.filter === "bharatiya") items = STATE.bharatiya;
+      else if (STATE.filter !== "all") items = STATE.rss.filter((item) => item.domain === STATE.filter);
+      document.getElementById("intelCards").innerHTML = items.length ? items.slice(0, 24).map((item) => intelHtml(item, STATE.filter === "bharatiya")).join("") : '<div class="panel"><div class="panel-body loading">No cards match the current filter.</div></div>';
+    }
+    function renderSidebars() {
+      document.getElementById("liveFeed").innerHTML = STATE.rss.length ? STATE.rss.slice(0, 12).map((item) => '<div class="feed-item"><div class="panel-body"><h3><a class="feed-link" href="' + esc(item.url || "#") + '" target="_blank" rel="noreferrer">' + esc(item.title) + '</a></h3><div class="meta-row"><span>' + esc(item.source) + '</span><span>' + esc(labelOf(item.domain)) + '</span><span>' + esc(ago(item.published)) + "</span></div></div></div>").join("") : '<div class="loading">RSS feeds offline or pending.</div>';
+      document.getElementById("alerts").innerHTML = STATE.critical.length ? STATE.critical.slice(0, 5).map((item) => '<div class="alert-item"><div class="panel-body"><h3>' + esc(item.title) + '</h3><div class="small muted" style="margin-top:8px;">' + esc(item.summary || "No summary available.") + '</div><div class="meta-row"><span>' + esc(item.source) + '</span><span>' + esc(item.severity.toUpperCase()) + '</span><span>' + esc(ago(item.published)) + "</span></div></div></div>").join("") : '<div class="loading">No critical alerts in current cache.</div>';
+      const pulse = [];
+      if (STATE.indiaMarkets?.nifty?.value) pulse.push({ label:"NIFTY 50", value:fmt(STATE.indiaMarkets.nifty.value, 2), detail:signed(STATE.indiaMarkets.nifty.pChange, 2) });
+      if (STATE.indiaMarkets?.sensex?.value) pulse.push({ label:"SENSEX", value:fmt(STATE.indiaMarkets.sensex.value, 2), detail:signed(STATE.indiaMarkets.sensex.pChange, 2) });
+      if (STATE.forex?.rates?.INR) pulse.push({ label:"USD/INR", value:Number(STATE.forex.rates.INR).toFixed(2), detail:"ExchangeRate" });
+      if (STATE.crypto?.bitcoin) pulse.push({ label:"BTC/INR", value:fmt(STATE.crypto.bitcoin.inr, 0), detail:signed(STATE.crypto.bitcoin.usd_24h_change, 2) });
+      if (STATE.weather?.current_weather) pulse.push({ label:"Delhi Temp", value:fmt(STATE.weather.current_weather.temperature, 1) + " C", detail:"Open-Meteo" });
+      document.getElementById("indiaPulse").innerHTML = pulse.length ? pulse.map((item) => '<div class="source"><div class="panel-body"><div class="split"><div style="font-size:12px;font-weight:600;">' + esc(item.label) + '</div><span class="tag stable">' + esc(item.value) + '</span></div><div class="small muted" style="margin-top:6px;">' + esc(item.detail) + "</div></div></div>").join("") : '<div class="loading">Waiting for India pulse sources.</div>';
+    }
+    function ensureMap() {
+      if (STATE.map) return;
+      STATE.map = L.map("worldMap", { zoomControl:true, worldCopyJump:true }).setView([20.5937, 78.9629], 3);
+      L.tileLayer("https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png", { attribution:"&copy; OpenStreetMap contributors &copy; CARTO" }).addTo(STATE.map);
+      STATE.mapLayers = { earthquakes:L.layerGroup().addTo(STATE.map), hotspots:L.layerGroup().addTo(STATE.map), bharatiya:L.layerGroup().addTo(STATE.map), climate:L.layerGroup().addTo(STATE.map) };
+    }
+    function renderMap() {
+      ensureMap();
+      Object.values(STATE.mapLayers).forEach((layer) => layer.clearLayers());
+      if (STATE.mapVisibility.earthquakes) {
+        STATE.earth.features.slice(0, 80).forEach((f) => {
+          const c = f.geometry.coordinates, mag = Number(f.properties.mag || 0);
+          const color = mag >= 6 ? "#ff3d57" : mag >= 4 ? "#ffbe00" : "#00ff88";
+          L.circleMarker([c[1], c[0]], { radius:Math.max(4, Math.min(16, mag * 2.4)), color, weight:1, fillOpacity:.42 })
+            .bindPopup("<strong>USGS live event</strong><br />Magnitude: M" + mag.toFixed(1) + "<br />Place: " + esc(f.properties.place) + "<br />Depth: " + esc(String(c[2])) + " km<br />Time: " + esc(new Date(f.properties.time).toLocaleString("en-IN")))
+            .addTo(STATE.mapLayers.earthquakes);
+        });
+      }
+      if (STATE.mapVisibility.hotspots) {
+        HOTSPOTS.forEach((item) => {
+          const color = item.risk === "CRITICAL" ? "#ff3d57" : item.risk === "HIGH" ? "#ffbe00" : "#ff8c00";
+          L.circleMarker([item.lat, item.lon], { radius:8, color, weight:2, fillOpacity:.2 })
+            .bindPopup("<strong>GOE assessed hotspot</strong><br />" + esc(item.name) + "<br />Risk: " + esc(item.risk) + "<br />India score: " + esc(String(item.india_score)) + "/100<br />" + esc(item.note))
+            .addTo(STATE.mapLayers.hotspots);
+        });
+      }
+      if (STATE.mapVisibility.bharatiya) {
+        L.circle([22.9734, 78.6569], { radius:560000, color:"#ff8c00", weight:2, fillOpacity:.08 })
+          .bindPopup("<strong>Bharatiya feed intensity</strong><br />Selected translated items: " + STATE.bharatiya.length + "<br />This ring is a GOE aggregate marker, not a geocoded article map.")
+          .addTo(STATE.mapLayers.bharatiya);
+      }
+      if (STATE.mapVisibility.climate && STATE.weather?.current_weather) {
+        L.marker([28.6139, 77.2090]).bindPopup("<strong>Delhi climate marker</strong><br />Temperature: " + fmt(STATE.weather.current_weather.temperature, 1) + " C<br />Wind: " + fmt(STATE.weather.current_weather.windspeed, 1) + " km/h<br />Source: Open-Meteo").addTo(STATE.mapLayers.climate);
+      }
+      document.getElementById("mapNote").textContent = "Earthquakes: live USGS. Hotspots: GOE assessed. Bharatiya layer: aggregate regional signal ring. Climate marker: Delhi current weather.";
+      document.getElementById("seismicList").innerHTML = STATE.earth.features.length ? STATE.earth.features.slice(0, 10).map((f) => {
+        const c = f.geometry.coordinates, mag = Number(f.properties.mag || 0).toFixed(1);
+        return '<div class="card"><div class="panel-body"><div class="split"><strong>M' + esc(mag) + '</strong><span class="tag ' + tagClass(severityOf(f.properties.place || "")) + '">USGS</span></div><div class="small muted" style="margin-top:8px;">' + esc(f.properties.place) + '</div><div class="meta-row"><span>' + esc(ago(f.properties.time)) + '</span><span>Depth ' + esc(String(c[2])) + " km</span></div></div></div>";
+      }).join("") : '<div class="loading">No seismic events available.</div>';
+      document.getElementById("hotspotList").innerHTML = HOTSPOTS.map((item) => '<div class="card"><div class="panel-body"><div class="split"><strong>' + esc(item.name) + '</strong><span class="tag ' + tagClass(item.risk === "CRITICAL" ? "critical" : "elevated") + '">' + esc(item.risk) + '</span></div><div class="small muted" style="margin-top:8px;">' + esc(item.note) + '</div><div class="meta-row"><span>' + esc(item.domain) + '</span><span>India score ' + esc(String(item.india_score)) + "</span></div></div></div>").join("");
+      document.getElementById("climateInfo").innerHTML = [
+        STATE.weather?.current_weather ? miniMetric("Delhi weather", fmt(STATE.weather.current_weather.temperature, 1) + " C", "Wind " + fmt(STATE.weather.current_weather.windspeed, 1) + " km/h") : miniMetric("Delhi weather", "n/a", "Open-Meteo pending"),
+        miniMetric("Bharatiya count", String(STATE.bharatiya.length), "Selected translated items"),
+        miniMetric("Map honesty", "Live + assessed", "Only the USGS layer is live geocoded event data.")
+      ].join("");
+      setTimeout(() => STATE.map.invalidateSize(), 60);
+    }
+    function renderIndia() {
+      const risk = STATE.risk || { score:"--", label:"pending", color:"info" };
+      document.getElementById("indiaMetrics").innerHTML = [
+        { label:"NIFTY 50", value:STATE.indiaMarkets?.nifty?.value ? fmt(STATE.indiaMarkets.nifty.value, 2) : "n/a", foot:STATE.indiaMarkets?.source || "NSE path pending.", cls:"elevated" },
+        { label:"SENSEX", value:STATE.indiaMarkets?.sensex?.value ? fmt(STATE.indiaMarkets.sensex.value, 2) : "n/a", foot:STATE.indiaMarkets?.source || "SENSEX unavailable in current source.", cls:"stable" },
+        { label:"USD / INR", value:STATE.forex?.rates?.INR ? Number(STATE.forex.rates.INR).toFixed(2) : "n/a", foot:"Open exchange rate feed.", cls:"info" },
+        { label:"India Risk", value:String(risk.score), foot:risk.label + " computed from live signals.", cls:risk.color }
+      ].map((item) => '<div class="metric"><div class="metric-kicker">' + esc(item.label) + '</div><div class="metric-value" style="color:' + (item.cls === "critical" ? "var(--alert-red)" : item.cls === "elevated" ? "var(--alert-amber)" : item.cls === "stable" ? "var(--phosphor)" : "var(--alert-blue)") + ';">' + esc(item.value) + '</div><div class="metric-foot">' + esc(item.foot) + "</div></div>").join("");
+      const india = STATE.countries.IND;
+      const cards = [];
+      if (india) { cards.push(miniMetric("Population", fmt(india.population), "REST Countries")); cards.push(miniMetric("Area", fmt(india.area) + " sq km", "REST Countries")); cards.push(miniMetric("Capital", (india.capital || ["n/a"]).join(", "), "REST Countries")); cards.push(miniMetric("Region", (india.region || "n/a") + " / " + (india.subregion || "n/a"), "REST Countries")); }
+      if (STATE.weather?.current_weather) cards.push(miniMetric("Delhi Weather", fmt(STATE.weather.current_weather.temperature, 1) + " C", "Wind " + fmt(STATE.weather.current_weather.windspeed, 1) + " km/h"));
+      cards.push(miniMetric("RSS mentions", String(STATE.rss.filter((item) => item.india).length), "India-linked live cards"));
+      document.getElementById("indiaOpenData").innerHTML = cards.join("");
+      document.getElementById("indiaExposure").innerHTML = STATE.rss.filter((item) => item.india).slice(0, 8).map((item) => intelHtml(item)).join("") || '<div class="loading">No India-linked signals yet.</div>';
+      document.getElementById("indiaGov").innerHTML = STATE.rss.filter((item) => ["PIB India","RBI Press","MEA India"].includes(item.source)).slice(0, 8).map((item) => intelHtml(item)).join("") || '<div class="loading">No PIB / RBI / MEA cards yet.</div>';
+      document.getElementById("indiaBharatiya").innerHTML = STATE.bharatiya.length ? STATE.bharatiya.slice(0, 8).map((item) => intelHtml(item, true)).join("") : '<div class="loading">Regional feed items will appear here once the selected language sources are fetched.</div>';
+    }
+    function renderChat() {
+      document.getElementById("chatSeeds").innerHTML = STATE.seeds.map((seed) => '<button class="seed-chip" type="button" data-seed="' + esc(seed) + '">' + esc(seed) + "</button>").join("");
+      const intro = '<div class="chat-entry"><div class="chat-role">GOE Analyst</div><div class="chat-bubble">GOE Antigravity is ready. No LLM required - answers are grounded in live feeds (' + esc(String(STATE.rss.length)) + ' signals), market data, and seismic context. Ask for any strategic assessment.</div></div>';
+      document.getElementById("chatLog").innerHTML = STATE.chat.length ? STATE.chat.map((entry) => '<div class="chat-entry ' + esc(entry.role) + '"><div class="chat-role">' + esc(entry.role === "user" ? "User" : "GOE Analyst") + '</div><div class="chat-bubble">' + esc(entry.content) + "</div></div>").join("") : intro;
+      document.getElementById("chatLog").scrollTop = document.getElementById("chatLog").scrollHeight;
+    }
+    function renderScenarios() {
+      document.getElementById("scenarioSeeds").innerHTML = STATE.scenarioSeeds.map((seed) => '<button class="seed-chip" type="button" data-scenario-seed="' + esc(seed) + '">' + esc(seed) + "</button>").join("");
+      document.getElementById("scenarioHistory").innerHTML = STATE.scenarioHistory.length ? STATE.scenarioHistory.map((item, i) => '<button class="history" type="button" data-scenario-index="' + i + '" style="text-align:left;"><div class="panel-body"><h3>' + esc(item.hypothesis) + '</h3><div class="small muted" style="margin-top:6px;">' + esc(item.assessment || "No assessment stored.") + '</div><div class="meta-row"><span>' + esc(ago(item.generatedAt)) + "</span></div></div></button>").join("") : '<div class="loading">No scenario history yet.</div>';
+    }
+    function renderMarkets() {
+      const crypto = STATE.crypto || {}, fx = STATE.forex?.rates || {}, india = STATE.indiaMarkets || {};
+      const add = (label, value, detail, color) => '<div class="metric"><div class="metric-kicker">' + esc(label) + '</div><div class="metric-value" style="color:' + color + ';">' + esc(value) + '</div><div class="metric-foot">' + esc(detail) + "</div></div>";
+      document.getElementById("marketTiles").innerHTML = [
+        add("BTC / USD", crypto.bitcoin?.usd ? "$" + fmt(crypto.bitcoin.usd) : "n/a", "CoinGecko public API", "var(--saffron)"),
+        add("BTC / INR", crypto.bitcoin?.inr ? "INR " + fmt(crypto.bitcoin.inr) : "n/a", "CoinGecko public API", "var(--phosphor)"),
+        add("ETH / USD", crypto.ethereum?.usd ? "$" + fmt(crypto.ethereum.usd) : "n/a", "CoinGecko public API", "var(--alert-blue)"),
+        add("SOL / USD", crypto.solana?.usd ? "$" + fmt(crypto.solana.usd, 2) : "n/a", "CoinGecko public API", "var(--saffron)"),
+        add("USD / INR", fx.INR ? Number(fx.INR).toFixed(2) : "n/a", "open.er-api live reference", "var(--alert-blue)"),
+        add("EUR / INR", fx.EUR ? (1 / Number(fx.EUR) * Number(fx.INR || 0)).toFixed(2) : "n/a", "Derived from USD base rates", "var(--phosphor)"),
+        add("CNY / INR", fx.CNY ? (1 / Number(fx.CNY) * Number(fx.INR || 0)).toFixed(2) : "n/a", "Derived from USD base rates", "var(--phosphor)"),
+        add("JPY / INR", fx.JPY ? (1 / Number(fx.JPY) * Number(fx.INR || 0)).toFixed(2) : "n/a", "Derived from USD base rates", "var(--phosphor)"),
+        add("NIFTY 50", india.nifty?.value ? fmt(india.nifty.value, 2) : "n/a", india.source || "Proxy pending", "var(--alert-amber)"),
+        add("SENSEX", india.sensex?.value ? fmt(india.sensex.value, 2) : "n/a", india.source || "Proxy pending", "var(--phosphor)"),
+        add("Gold", "n/a", "Not available in current free browser mode", "var(--alert-blue)"),
+        add("Brent", "n/a", "Not available in free tier", "var(--alert-red)")
+      ].join("");
+      renderChart();
+    }
+    function renderChart() {
+      const ctx = document.getElementById("btcChart");
+      const points = (STATE.cryptoHistory?.prices || []).map((p) => ({ label:new Date(p[0]).toLocaleDateString("en-IN", { month:"short", day:"numeric" }), value:p[1] }));
+      if (!points.length) return;
+      if (STATE.chart) STATE.chart.destroy();
+      STATE.chart = new Chart(ctx, {
+        type:"line",
+        data:{ labels:points.map((p) => p.label), datasets:[{ label:"BTC/USD", data:points.map((p) => p.value), borderColor:"#ff8c00", backgroundColor:"rgba(255,140,0,.14)", fill:true, tension:.28, pointRadius:3 }] },
+        options:{ responsive:true, maintainAspectRatio:false, animation:{ duration:1000 }, plugins:{ legend:{ labels:{ color:"#e8ebf4" } } }, scales:{ x:{ ticks:{ color:"#8b93b0" }, grid:{ color:"rgba(255,255,255,.05)" } }, y:{ ticks:{ color:"#8b93b0" }, grid:{ color:"rgba(255,255,255,.05)" } } } }
+      });
+    }
+    function buildGraph() {
+      const nodes = new Map(), links = [];
+      const add = (id, type, weight = 1) => { const existing = nodes.get(id); if (existing) { existing.weight += weight; return; } nodes.set(id, { id, label:id, type, weight }); };
+      add("India", "nation", 8);
+      ["Geopolitics","Economics","Defense","Technology","Climate","Bharatiya"].forEach((label) => add(label, "domain", 5));
+      HOTSPOTS.slice(0, 6).forEach((item) => { add(item.name, "hotspot", 4); links.push({ source:"India", target:item.name }); links.push({ source:labelOf(item.domain), target:item.name }); });
+      const stop = new Set(["The","India","Indian","RBI","PIB","World","News","Live","Update"]);
+      STATE.rss.slice(0, 16).forEach((item) => {
+        const matches = item.title.match(/\b[A-Z][A-Za-z0-9.-]{2,}\b/g) || [];
+        const entities = matches.filter((x) => !stop.has(x)).slice(0, 2);
+        const domain = item.domain === "bharatiya" ? "Bharatiya" : labelOf(item.domain);
+        add(domain, "domain", 2);
+        entities.forEach((entity) => { add(entity, "entity", item.india ? 3 : 2); links.push({ source:domain, target:entity }); if (item.india || /India|Indian/.test(item.title)) links.push({ source:"India", target:entity }); });
+      });
+      return { nodes:[...nodes.values()], links };
+    }
+    function renderGraph() {
+      STATE.graph = buildGraph();
+      const svg = d3.select("#ontologyGraph"); svg.selectAll("*").remove();
+      const width = document.getElementById("ontologyGraph").clientWidth || 900, height = 520;
+      const defs = svg.append("defs"); const filter = defs.append("filter").attr("id", "graphGlow"); filter.append("feGaussianBlur").attr("stdDeviation", 3).attr("result", "blur"); const merge = filter.append("feMerge"); merge.append("feMergeNode").attr("in", "blur"); merge.append("feMergeNode").attr("in", "SourceGraphic");
+      const colors = { nation:"#ff8c00", domain:"#4d9eff", hotspot:"#ff3d57", entity:"#00ff88" };
+      const sim = d3.forceSimulation(STATE.graph.nodes).force("link", d3.forceLink(STATE.graph.links).id((d) => d.id).distance(150)).force("charge", d3.forceManyBody().strength(-240)).force("center", d3.forceCenter(width / 2, height / 2)).force("collision", d3.forceCollide().radius((d) => 18 + d.weight));
+      const link = svg.append("g").attr("stroke", "rgba(255,255,255,.15)").selectAll("line").data(STATE.graph.links).join("line").attr("stroke-width", 1.2);
+      const node = svg.append("g").selectAll("g").data(STATE.graph.nodes).join("g").style("cursor", "pointer")
+        .call(d3.drag().on("start", (event, d) => { if (!event.active) sim.alphaTarget(.2).restart(); d.fx = d.x; d.fy = d.y; }).on("drag", (event, d) => { d.fx = event.x; d.fy = event.y; }).on("end", (event, d) => { if (!event.active) sim.alphaTarget(0); d.fx = null; d.fy = null; }))
+        .on("click", (event, d) => { switchModule("analyst"); document.getElementById("chatInput").value = "Map the current connection path around " + d.id + " and explain why it matters for India."; });
+      node.append("circle").attr("r", (d) => Math.max(12, 10 + d.weight)).attr("fill", (d) => colors[d.type] || "#8b93b0").attr("fill-opacity", .85).attr("filter", "url(#graphGlow)");
+      node.append("text").text((d) => d.label).attr("text-anchor", "middle").attr("y", (d) => Math.max(12, 10 + d.weight) + 14).attr("fill", "#e8ebf4").attr("font-size", 10).attr("font-family", "Space Mono, monospace");
+      sim.on("tick", () => { link.attr("x1", (d) => d.source.x).attr("y1", (d) => d.source.y).attr("x2", (d) => d.target.x).attr("y2", (d) => d.target.y); node.attr("transform", (d) => "translate(" + d.x + "," + d.y + ")"); });
+      highlightGraph();
+    }
+    function highlightGraph() {
+      const q = STATE.graphSearch.trim().toLowerCase();
+      d3.select("#ontologyGraph").selectAll("g").style("opacity", (d) => !q || (d && d.id && d.id.toLowerCase().includes(q)) ? 1 : .18);
+    }
+    function graphPath(from, to) {
+      if (!STATE.graph) STATE.graph = buildGraph();
+      const adj = new Map();
+      STATE.graph.links.forEach((link) => {
+        const s = typeof link.source === "string" ? link.source : link.source.id, t = typeof link.target === "string" ? link.target : link.target.id;
+        if (!adj.has(s)) adj.set(s, []); if (!adj.has(t)) adj.set(t, []);
+        adj.get(s).push(t); adj.get(t).push(s);
+      });
+      const queue = [[from]], seen = new Set([from]);
+      while (queue.length) {
+        const path = queue.shift(), cur = path[path.length - 1];
+        if (cur === to) return path;
+        (adj.get(cur) || []).forEach((next) => { if (!seen.has(next)) { seen.add(next); queue.push([...path, next]); } });
+      }
+      return null;
+    }
+    async function explainConnection() {
+      const from = document.getElementById("connectionFrom").value.trim(), to = document.getElementById("connectionTo").value.trim();
+      if (!from || !to) { document.getElementById("connectionResult").innerHTML = '<div class="card"><div class="panel-body">Enter both entities first.</div></div>'; return; }
+      const path = graphPath(from, to);
+      if (!path) { document.getElementById("connectionResult").innerHTML = '<div class="card"><div class="panel-body">GOE could not find a graph path between the two entities in the current live graph snapshot.</div></div>'; return; }
+      let explanation = "Path: " + path.join(" -> ");
+      try { if (AI.config.mode !== "none") explanation = await AI.call([{ role:"user", content:"Explain why this ontology path matters for India in three sentences.\n\nPath: " + path.join(" -> ") }], "You explain graph paths for strategic analysts. Keep it concise.", 250) || explanation; } catch {}
+      document.getElementById("connectionResult").innerHTML = '<div class="card"><div class="panel-body"><h3>Connection found</h3><div class="small muted" style="margin-top:6px;">' + esc(path.join(" -> ")) + "</div></div></div><div class=\"card\"><div class=\"panel-body\"><h3>Interpretation</h3><div class=\"small muted\" style=\"margin-top:6px;\">" + esc(explanation) + "</div></div></div>";
+    }
+    async function ask(question, regenerate = false) {
+      if (!question) return;
+      if (!regenerate) STATE.chat.push({ role:"user", content:question });
+      renderChat();
+      let reply = "";
+      try {
+        if (AI.config.mode === "none") reply = await ANTIGRAVITY.answer(question);
+        else {
+          const ctx = await context(2400);
+          reply = await AI.call([{ role:"user", content:ctx + "\n\nUSER QUERY: " + question }], SYSTEM_PROMPT, 1500) || await ANTIGRAVITY.answer(question);
+        }
+      } catch (error) {
+        try {
+          reply = await ANTIGRAVITY.answer(question);
+        } catch {
+          reply = "GOE engine error: " + error.message + "\n\nLive context:\n" + await context(1200);
+        }
+      }
+      STATE.chat.push({ role:"assistant", content:reply }); STATE.chat = STATE.chat.slice(-24); STATE.lastQuestion = question; saveSession(KEYS.chat, STATE.chat); saveSession(KEYS.last, question); renderChat();
+    }
+    function fallbackBrief() {
+      const top = STATE.rss.slice(0, 6), risk = STATE.risk || { score:"--", label:"UNKNOWN" }, lines = [];
+      lines.push("GOE STRATEGIC INTELLIGENCE BRIEF"); lines.push("Date: " + new Date().toLocaleDateString("en-IN", { weekday:"long", year:"numeric", month:"long", day:"numeric" })); lines.push("Classification: FOR AUTHORISED PERSONNEL ONLY"); lines.push("Generated by: GOE Mode A fallback brief assembler"); lines.push("");
+      lines.push("EXECUTIVE SUMMARY"); lines.push("The brief is running in deterministic fallback mode because no AI backend is available. The document below uses current live feeds and market data without inserting inferred facts as confirmed intelligence."); lines.push("");
+      lines.push("INDIA STRATEGIC UPDATE"); lines.push("- Current India Risk Score: " + risk.score + "/100 | Trend: " + risk.label); lines.push("- Top priority for the next 24 hours: Monitor the highest-severity India-linked RSS items and verify any border or energy trigger before escalation."); lines.push("- Key opportunity: Use live macro and regional feed data to support a faster decision loop."); lines.push("");
+      ["geopolitics","economics","defense","technology","climate"].forEach((domain) => { const item = STATE.rss.find((entry) => entry.domain === domain) || top[0]; lines.push(domain.toUpperCase() + " - " + (item ? item.title : "Data not available in current feed.")); lines.push(item ? (item.summary || "Summary not available in current feed.") : "Data not available in current feed."); lines.push(""); });
+      lines.push("THREAT MATRIX"); lines.push("Domain | Risk Level | India Impact | Trend"); lines.push("Geopolitics | " + risk.label + " | High | Mixed"); lines.push("Economics | " + (STATE.forex?.rates?.INR ? "Active" : "Unknown") + " | Medium | Mixed"); lines.push("Defense | " + (STATE.critical.length ? "Elevated" : "Moderate") + " | High | Watch"); lines.push(""); lines.push("ENTITIES TO WATCH"); top.slice(0, 3).forEach((item) => lines.push("- " + item.source + ": " + item.title)); lines.push(""); lines.push("END OF BRIEF"); return lines.join("\n");
+    }
+    async function buildBrief() {
+      const steps = [...document.querySelectorAll(".step")]; const set = async (i) => { steps.forEach((step, idx) => { step.classList.toggle("active", idx === i); step.classList.toggle("done", idx < i); }); await new Promise((resolve) => setTimeout(resolve, 350)); };
+      await set(0); await set(1);
+      let text = "";
+      try {
+        const response = await fetch("http://localhost:8000/api/v1/analyst/daily-brief", { method: "POST" });
+        const data = await response.json();
+        text = data.content || data.document || data.error || "";
+      } catch {}
+      if (!text) text = await ANTIGRAVITY.answer("Generate today's complete daily strategic intelligence brief with executive summary, threat matrix, and strategic priorities for India.");
+      await set(2); steps.forEach((step) => { step.classList.remove("active"); step.classList.add("done"); });
+      document.getElementById("briefDoc").textContent = text || fallbackBrief();
+    }
+    function fallbackMarketAnalysis() {
+      const lines = ["Mode A deterministic market analysis"];
+      if (STATE.indiaMarkets?.nifty?.value) lines.push("NIFTY 50: " + fmt(STATE.indiaMarkets.nifty.value, 2) + " from " + STATE.indiaMarkets.source + ".");
+      else lines.push("NIFTY 50: unavailable in the current browser fetch path.");
+      if (STATE.forex?.rates?.INR) lines.push("USD/INR: " + Number(STATE.forex.rates.INR).toFixed(2) + " from open.er-api.");
+      if (STATE.crypto?.bitcoin) lines.push("BTC/USD: $" + fmt(STATE.crypto.bitcoin.usd, 0) + " with 24h change " + signed(STATE.crypto.bitcoin.usd_24h_change, 2) + ".");
+      lines.push("Interpretation: GOE can already describe the live board, but a full market narrative requires an active AI backend.");
+      return lines.join("\n");
+    }
+    async function marketAnalysis() {
+      let text = "";
+      try {
+        const ctx = await context(1600);
+        text = AI.config.mode !== "none" ? (await AI.call([{ role:"user", content:"Interpret the current live market numbers for India's macro picture.\n\n" + ctx }], SYSTEM_PROMPT, 900)) : fallbackMarketAnalysis();
+      } catch { text = fallbackMarketAnalysis(); }
+      document.getElementById("marketAnalysis").textContent = text || fallbackMarketAnalysis();
+    }
+    async function runScenario() {
+      const hypothesis = document.getElementById("scenarioInput").value.trim();
+      if (!hypothesis) { document.getElementById("scenarioResult").textContent = "Enter a hypothesis first."; return; }
+      document.getElementById("scenarioResult").innerHTML = '<div class="loading">Running scenario engine on Antigravity backend...</div>';
+      let payload = null;
+      try {
+        const response = await fetch("http://localhost:8000/api/v1/analyst/scenario", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ hypothesis: hypothesis })
+        });
+        const data = await response.json();
+        payload = data.tree;
+      } catch (err) { console.error("Antigravity backend scenario failed", err); }
+      if (!payload) {
+        payload = {
+          trigger:hypothesis, timeline:"AI unavailable - deterministic placeholder path", overall_confidence:20,
+          india_net_assessment:"AI is not configured, so GOE cannot produce a credible scenario tree. Connect Ollama or Anthropic for full branch analysis.",
+          branches:[
+            { label:"Branch A - Rapid shock", probability:40, india_impact_score:STATE.risk ? Math.min(95, STATE.risk.score + 10) : 60, india_impact:"HIGH", specific_india_effects:["Immediate decision pressure","Need to validate live exposure data"], timeline:"24-72 hours", key_actors:["India","Primary actors in hypothesis"], recommended_response:"Activate AI-backed scenario engine for a real branch assessment.", historical_analog:"No validated analog without AI." },
+            { label:"Branch B - Controlled deterioration", probability:35, india_impact_score:STATE.risk ? STATE.risk.score : 50, india_impact:"MEDIUM", specific_india_effects:["Economic monitoring required","Diplomatic signalling required"], timeline:"1-3 weeks", key_actors:["India","Regional stakeholders"], recommended_response:"Track RSS, markets, and seismic context while preparing decision options.", historical_analog:"No validated analog without AI." },
+            { label:"Branch C - De-escalation", probability:25, india_impact_score:STATE.risk ? Math.max(25, STATE.risk.score - 15) : 35, india_impact:"LOW", specific_india_effects:["Reduced urgency","Opportunity for diplomatic shaping"], timeline:"2-6 weeks", key_actors:["India","External mediators"], recommended_response:"Maintain monitoring posture and avoid overcommitting before confirmation.", historical_analog:"No validated analog without AI." }
+          ]
+        };
+      }
+      document.getElementById("scenarioResult").innerHTML = '<div class="card"><div class="panel-body"><h3>Trigger</h3><div class="small muted" style="margin-top:6px;">' + esc(payload.trigger || hypothesis) + '</div><div class="meta-row"><span>Timeline ' + esc(payload.timeline || "n/a") + '</span><span>Confidence ' + esc(String(payload.overall_confidence || "n/a")) + "</span></div></div></div>" + (payload.branches || []).map((branch) => '<div class="card"><div class="panel-body"><div class="split"><div><h3>' + esc(branch.label) + '</h3><div class="small muted" style="margin-top:6px;">' + esc(branch.recommended_response || "No recommendation available.") + '</div></div><div class="scenario-prob">' + esc(String(branch.probability || "--")) + '%</div></div><div class="meta-row"><span>' + esc(branch.india_impact || "UNKNOWN") + '</span><span>India score ' + esc(String(branch.india_impact_score || "--")) + '</span><span>' + esc(branch.timeline || "n/a") + '</span></div><div class="small muted" style="margin-top:8px;">Effects: ' + esc((branch.specific_india_effects || []).join("; ")) + '</div><div class="small muted" style="margin-top:8px;">Actors: ' + esc((branch.key_actors || []).join(", ")) + '</div><div class="small muted" style="margin-top:8px;">Historical analog: ' + esc(branch.historical_analog || "n/a") + "</div></div></div>").join("") + '<div class="card"><div class="panel-body"><h3>Net assessment</h3><div class="small muted" style="margin-top:6px;">' + esc(payload.india_net_assessment || "n/a") + "</div></div></div>";
+      STATE.scenarioHistory.unshift({ hypothesis, generatedAt:new Date().toISOString(), assessment:payload.india_net_assessment || "", raw:payload }); STATE.scenarioHistory = STATE.scenarioHistory.slice(0, 5); saveSession(KEYS.scenarios, STATE.scenarioHistory); renderScenarios();
+    }
+    function switchModule(module) {
+      STATE.module = module;
+      document.querySelectorAll(".module").forEach((el) => el.classList.toggle("active", el.id === "module-" + module));
+      document.querySelectorAll("#nav button").forEach((btn) => btn.classList.toggle("active", btn.dataset.module === module));
+      if (module === "worldmonitor") renderMap();
+      if (module === "ontology") renderGraph();
+    }
+    function renderAll() {
+      renderFilters(); renderLanguageToggles(); renderTicker(); renderSourceHealth(); renderOverview(); renderIntelligence(); renderSidebars(); renderIndia(); renderMap(); renderChat(); renderScenarios(); renderMarkets(); renderGraph();
+    }
+    async function refreshAll(force = false) {
+      markRefresh();
+      const core = await Promise.allSettled([DATA.earthquakes(force), DATA.crypto(force), DATA.cryptoHistory(force), DATA.forex(force), DATA.indiaMarkets(force), DATA.weather(force), DATA.countries(force)]);
+      STATE.earth = core[0].status === "fulfilled" ? core[0].value : STATE.earth;
+      STATE.crypto = core[1].status === "fulfilled" ? core[1].value : STATE.crypto;
+      STATE.cryptoHistory = core[2].status === "fulfilled" ? core[2].value : STATE.cryptoHistory;
+      STATE.forex = core[3].status === "fulfilled" ? core[3].value : STATE.forex;
+      STATE.indiaMarkets = core[4].status === "fulfilled" ? core[4].value : STATE.indiaMarkets;
+      STATE.weather = core[5].status === "fulfilled" ? core[5].value : STATE.weather;
+      STATE.countries = core[6].status === "fulfilled" ? core[6].value : STATE.countries;
+      STATE.rss = (await DATA.allRss(force)).map((item) => ({ ...item, severity:item.severity || severityOf(item.title + " " + item.summary) }));
+      await BHARATIYA.refresh();
+      await computeRisk();
+      STATE.critical = STATE.rss.filter((item) => item.severity === "critical" || item.severity === "elevated").slice(0, 10);
+      renderAll();
+    }
+    function clearSession() {
+      Object.values(KEYS).forEach((key) => sessionStorage.removeItem(key));
+      STATE.chat = []; STATE.scenarioHistory = []; STATE.lastQuestion = ""; saveSession(KEYS.chat, []); saveSession(KEYS.scenarios, []);
+      AI.config.apiKey = ""; AI.config.mode = "detecting"; setAiStatus("Session cleared - redetecting AI", "warn");
+      AI.detect(); renderChat(); renderScenarios();
+    }
+    function bind() {
+      document.getElementById("unlockButton").addEventListener("click", unlock);
+      document.getElementById("authPassword").addEventListener("keydown", (e) => { if (e.key === "Enter") unlock(); });
+      document.getElementById("saveApiKey").addEventListener("click", () => {
+        const key = document.getElementById("apiKeyInput").value.trim();
+        if (!key) { document.getElementById("aiMessage").textContent = "Enter a key first."; return; }
+        sessionStorage.setItem(KEYS.api, key); AI.config.apiKey = key; AI.config.mode = "anthropic"; setAiStatus("Anthropic API key loaded", "warn"); hideAiModal();
+      });
+      document.getElementById("retryAi").addEventListener("click", async () => { document.getElementById("aiMessage").textContent = "Retrying local Ollama detection."; AI.config.mode = "detecting"; const mode = await AI.detect(); document.getElementById("aiMessage").textContent = mode === "ollama" ? "Ollama detected." : "Ollama still unavailable."; if (mode !== "none") hideAiModal(); });
+      document.getElementById("skipAi").addEventListener("click", hideAiModal);
+      document.getElementById("openAi").addEventListener("click", showAiModal);
+      document.getElementById("refreshAll").addEventListener("click", () => refreshAll(true));
+      document.getElementById("refreshMap").addEventListener("click", () => refreshAll(true));
+      document.getElementById("clearSession").addEventListener("click", clearSession);
+      document.getElementById("sendChat").addEventListener("click", async () => { const q = document.getElementById("chatInput").value.trim(); if (!q) return; document.getElementById("chatInput").value = ""; await ask(q, false); });
+      document.getElementById("chatInput").addEventListener("keydown", async (e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); const q = document.getElementById("chatInput").value.trim(); if (!q) return; document.getElementById("chatInput").value = ""; await ask(q, false); } });
+      document.getElementById("regenChat").addEventListener("click", async () => { const q = STATE.lastQuestion || document.getElementById("chatInput").value.trim(); if (q) await ask(q, true); });
+      document.getElementById("clearChat").addEventListener("click", () => { STATE.chat = []; saveSession(KEYS.chat, STATE.chat); renderChat(); });
+      document.getElementById("exportChat").addEventListener("click", () => download("goe-chat-history.txt", STATE.chat.map((x) => "[" + x.role.toUpperCase() + "]\n" + x.content).join("\n\n") || "No chat history."));
+      document.getElementById("genBrief").addEventListener("click", buildBrief);
+      document.getElementById("printBrief").addEventListener("click", () => window.print());
+      document.getElementById("runScenario").addEventListener("click", runScenario);
+      document.getElementById("runMarketAnalysis").addEventListener("click", marketAnalysis);
+      document.getElementById("graphSearch").addEventListener("input", (e) => { STATE.graphSearch = e.target.value; highlightGraph(); });
+      document.getElementById("findConnection").addEventListener("click", explainConnection);
+      document.getElementById("refreshGraph").addEventListener("click", renderGraph);
+      document.getElementById("exportGraphJson").addEventListener("click", () => download("goe-graph.json", JSON.stringify(STATE.graph || buildGraph(), null, 2), "application/json"));
+      document.getElementById("exportGraphSvg").addEventListener("click", () => download("goe-graph.svg", document.getElementById("ontologyGraph").outerHTML, "image/svg+xml"));
+      document.body.addEventListener("click", (e) => {
+        const nav = e.target.closest("[data-module]"); if (nav) switchModule(nav.dataset.module);
+        const jump = e.target.closest("[data-jump]"); if (jump) switchModule(jump.dataset.jump);
+        const domain = e.target.closest("[data-domain]"); if (domain) { STATE.filter = domain.dataset.domain; renderFilters(); renderIntelligence(); switchModule("intelligence"); }
+        const seed = e.target.closest("[data-seed]"); if (seed) document.getElementById("chatInput").value = seed.dataset.seed;
+        const scenarioSeed = e.target.closest("[data-scenario-seed]"); if (scenarioSeed) document.getElementById("scenarioInput").value = scenarioSeed.dataset.scenarioSeed;
+        const history = e.target.closest("[data-scenario-index]"); if (history) { const item = STATE.scenarioHistory[Number(history.dataset.scenarioIndex)]; if (item) { document.getElementById("scenarioInput").value = item.hypothesis; switchModule("scenarios"); } }
+        const mapChip = e.target.closest("[data-layer]"); if (mapChip) { const layer = mapChip.dataset.layer; STATE.mapVisibility[layer] = !STATE.mapVisibility[layer]; mapChip.classList.toggle("active", STATE.mapVisibility[layer]); renderMap(); }
+      });
+      document.body.addEventListener("change", async (e) => {
+        const input = e.target.closest("[data-language]");
+        if (!input) return;
+        if (input.checked) STATE.activeLanguages.add(input.dataset.language); else STATE.activeLanguages.delete(input.dataset.language);
+        await BHARATIYA.refresh(); await computeRisk(); renderAll();
+      });
+    }
+    function unlock() {
+      const value = document.getElementById("authPassword").value.trim();
+      if (value !== "GOE-INDIA-2026") { document.getElementById("authMessage").textContent = "Incorrect session password."; return; }
+      sessionStorage.setItem(KEYS.auth, "true"); document.getElementById("authModal").classList.add("hidden"); boot();
+    }
+    async function boot() {
+      setClock(); renderFilters(); renderLanguageToggles(); renderChat(); renderScenarios(); renderSourceHealth();
+      await AI.detect(); await refreshAll(false);
+      setInterval(setClock, 1000);
+      setInterval(() => refreshAll(false), 5 * 60 * 1000);
+      setInterval(async () => { STATE.rss = await DATA.allRss(false); await BHARATIYA.refresh(); await computeRisk(); STATE.critical = STATE.rss.filter((item) => item.severity === "critical" || item.severity === "elevated").slice(0, 10); renderAll(); }, 10 * 60 * 1000);
+    }
+    function init() {
+      bind(); setClock(); renderFilters(); renderLanguageToggles(); renderChat(); renderScenarios();
+      if (sessionStorage.getItem(KEYS.auth) === "true") { document.getElementById("authModal").classList.add("hidden"); boot(); }
+    }
+    document.addEventListener("DOMContentLoaded", init);
+</script>
+</body>
+</html>

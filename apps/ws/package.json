@@ -1,0 +1,14 @@
+{
+  "name": "goe-ws",
+  "version": "4.0.0",
+  "private": true,
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ioredis": "^5.4.1",
+    "jsonwebtoken": "^9.0.2",
+    "ws": "^8.17.0"
+  }
+}

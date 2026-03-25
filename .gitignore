@@ -1,0 +1,30 @@
+# Environments
+.env
+.venv/
+.local_venv/
+env/
+venv/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.pytest_cache/
+
+# Databases and Data
+/data/
+*.db
+*.sqlite3
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Logs
+/logs/
+*.log
+
+# IDEs
+.vscode/
+.idea/
